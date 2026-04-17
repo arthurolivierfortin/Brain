@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 import respx
 from httpx import Response
@@ -19,6 +21,10 @@ def test_ingest_posts_each_turn():
         turns=[Turn(role="user", content="hi"), Turn(role="assistant", content="hey")],
     ))
     assert respx.calls.call_count == 2
+    body = json.loads(respx.calls[0].request.content)
+    assert body["skip_gate"] is True
+    assert body["agent"] == "longmemeval"
+    assert body["memory_type"] == "context"
 
 
 @respx.mock

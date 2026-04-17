@@ -17,12 +17,16 @@ class BrainAdapter:
         """Forget every memory currently stored.
 
         For phase 5a we iterate and forget per entry. A bulk /reset
-        endpoint on Brain is a future improvement.
+        endpoint on Brain is a future improvement. Errors on /stats or
+        /forget raise — a silent failure here would poison benchmark
+        integrity (leftover memories from the previous entry).
         """
-        stats = self._client.get(f"{self._url}/stats").json()
-        ids = stats.get("ids", [])
+        resp = self._client.get(f"{self._url}/stats")
+        resp.raise_for_status()
+        ids = resp.json().get("ids", [])
         for mid in ids:
-            self._client.post(f"{self._url}/forget", json={"id": mid})
+            forget_resp = self._client.post(f"{self._url}/forget", json={"id": mid})
+            forget_resp.raise_for_status()
 
     def ingest(self, session: Session) -> None:
         for i, turn in enumerate(session.turns):
@@ -59,3 +63,12 @@ class BrainAdapter:
             )
             for r in data.get("results", [])
         ]
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> BrainAdapter:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()

@@ -118,6 +118,19 @@ No agent has been built for Brain yet. For now: feature branch → push → `gh 
 2. Never claim "tests pass" without pasting the runner output.
 3. Never claim "Brain is running" without showing a successful healthcheck (`curl localhost:8611/health`).
 
+## Docker safety — non-negotiable invariants
+
+Context: on 2026-04-17 an agent ran `docker compose --project-name docker --remove-orphans down` from `C:/Brain/docker/` and wiped 10 Money containers (volumes survived, images cached). The project name `docker` was derived from the parent directory and collided with Money's `C:/Money/docker/` compose. **Never repeat this.**
+
+1. **Every compose.yml MUST start with `name: <explicit>` at top level.** Never let the project name be inferred from the directory (directories named `docker/` collide across repos).
+2. **`--remove-orphans` is destructive cross-project.** Forbidden unless:
+   - `docker compose ls` has been inspected
+   - `docker compose config` confirms the target project name
+   - The user has explicitly approved after seeing the orphan list
+3. **Any "Found orphan containers [...]" warning = STOP.** Read the list. If any container outside the current repo appears, the project namespace is contaminated — fix `name:` and retry. Never force through.
+4. **`--project-name` flag: never pass a name that is not unique to this repo.** If you need to operate on another project's containers, `cd` into that repo and use its compose file.
+5. **Transparency over silent recovery.** If a destructive action leaks across projects, tell the user immediately, list the exact impact (containers lost, volumes touched, data state), and wait for instructions. Never "fix it quietly".
+
 ## What a fresh agent should do first
 
 1. Read this file (done if you're reading).

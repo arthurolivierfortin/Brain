@@ -26,11 +26,12 @@ def test_write_markdown_report(tmp_path: Path):
         adapter="brain",
         reader="claude-opus-4-7",
         judge="claude-opus-4-7",
+        date="2026-04-20",
         commit="abc1234",
         duration_s=8040,
     )
     text = out.read_text()
-    assert "LongMemEval-s" in text or "longmemeval_s" in text
+    assert "2026-04-20" in text
     assert "0.681" in text
     assert "0.742" in text
     assert "info-extraction" in text

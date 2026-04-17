@@ -22,13 +22,14 @@ def write_markdown_report(
     adapter: str,
     reader: str,
     judge: str,
+    date: str,
     commit: str,
     duration_s: float,
 ) -> None:
     mean_latency = duration_s / summary.n if summary.n else 0.0
     out_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        f"# {benchmark} — {adapter} — {out_path.stem[:10]}",
+        f"# {benchmark} — {adapter} — {date}",
         "",
         f"**Config**: reader={reader}, judge={judge}, adapter={adapter}, N={summary.n}",
         f"**Commit**: {commit}",

@@ -91,7 +91,8 @@ No agent has been built for Brain yet. For now: feature branch → push → `gh 
 
 ## External systems this repo talks to
 
-- **Brain HTTP API** — `http://localhost:8611` (Money's current Brain, used for dogfooding until we extract our own)
+- **Brain standalone HTTP API** — `http://localhost:8621` (this repo's Docker service, host-port 8621→container 8611). MCP SSE on `http://localhost:8620`.
+- **Money legacy Brain** — `http://localhost:8611` (Money's embedded Brain, still running until the dogfood cutover). Do NOT confuse with this repo's service.
 - **Gemini Flash** — summarizes Claude Code session deltas in `scripts/brain_hook.py` (`GOOGLE_API_KEY` env var)
 - **Claude Code statusLine + Stop hook** — `.claude/settings.json` wires them up
 
@@ -116,7 +117,7 @@ No agent has been built for Brain yet. For now: feature branch → push → `gh 
 
 1. Never claim "the benchmark passes" without showing the score output.
 2. Never claim "tests pass" without pasting the runner output.
-3. Never claim "Brain is running" without showing a successful healthcheck (`curl localhost:8611/health`).
+3. Never claim "Brain is running" without showing a successful healthcheck (`curl localhost:8621/health` for this repo's standalone Brain).
 
 ## Docker safety — non-negotiable invariants
 

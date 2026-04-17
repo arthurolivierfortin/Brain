@@ -29,7 +29,7 @@ brain/
 ├── backend/          # Python (FastAPI) — HTTP API + MCP server
 ├── frontend/         # Next.js 15 + Tailwind + shadcn — memory browser, graph viz
 ├── docker/
-│   └── compose.yml   # backend:8611, frontend:8700
+│   └── compose.yml   # backend host-port 8621 (→8611 internal), MCP 8620 (→8610). Frontend port TBD (phase 4).
 ├── installer/        # Node script — npx brain
 ├── benchmarks/       # LongMemEval, LoCoMo harness + results
 ├── scripts/          # Client-side hooks (copy into consumer repos)
@@ -102,7 +102,7 @@ Money keeps its current embedded Brain running until the new one is mature and d
 - [x] Copy 9 core modules (`store`, `gate`, `graph`, `memory`, `enrichment`, `events`, `pending_queue`, `decisions`, `server`) + 9 test files
 - [x] Rename imports `money.brain` → `brain`, purge `money.core.*`, replace yaml-config with env vars
 - [x] Install via uv, ruff clean, **143/143 pytest green**
-- [ ] `docker compose up` — backend reachable on :8611, `/health` OK
+- [x] `docker compose up` — backend reachable on `:8621`, `/health` OK (healthy 2026-04-17)
 - [ ] Dogfood: point Money's `BRAIN_URL` env var to the new container, run for a week
 
 ### Phase 2 — MCP server
@@ -152,7 +152,7 @@ Money keeps its current embedded Brain running until the new one is mature and d
 ## Repo dependencies for a fresh agent
 
 **Money** (`C:\Money`) — parent repo. Has:
-- Working Brain service (Python, port 8611) — the code to extract
+- Legacy embedded Brain service (Python, port 8611) — the source we extracted from
 - `.claude/settings.json` — reference for this repo's config
 - `scripts/brain_hook.py` / `scripts/brain_statusline.py` — already copied here
 

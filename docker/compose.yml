@@ -1,0 +1,20 @@
+services:
+  brain:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.brain
+    container_name: brain
+    ports:
+      - "8610:8610"
+      - "8611:8611"
+    volumes:
+      - brain-chromadb:/data/chromadb
+    environment:
+      BRAIN_HTTP_PORT: "8611"
+      BRAIN_MCP_PORT: "8610"
+      BRAIN_PERSIST_DIR: /data/chromadb
+      BRAIN_SERVICE_HOST: brain
+    restart: unless-stopped
+
+volumes:
+  brain-chromadb:

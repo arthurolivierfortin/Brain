@@ -1,0 +1,31 @@
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash -u 1000 brain \
+    && mkdir -p /app /data/chromadb \
+    && chown -R brain:brain /app /data
+
+WORKDIR /app
+
+COPY --chown=brain:brain backend/pyproject.toml ./
+COPY --chown=brain:brain backend/src ./src
+
+RUN pip install --no-cache-dir -e .
+
+USER brain
+
+ENV BRAIN_HTTP_PORT=8611
+ENV BRAIN_MCP_PORT=8610
+ENV BRAIN_HOST=0.0.0.0
+ENV BRAIN_PERSIST_DIR=/data/chromadb
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8610 8611
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8611/health || exit 1
+
+CMD ["python", "-m", "brain.server"]

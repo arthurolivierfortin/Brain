@@ -54,4 +54,5 @@ def test_reset_calls_forget_all():
     )
     adapter = BrainAdapter(brain_url="http://brain:8611")
     adapter.reset()
-    assert respx.calls.call_count >= 1
+    forget_calls = [c for c in respx.calls if "/forget" in str(c.request.url)]
+    assert len(forget_calls) == 2, f"expected 2 /forget calls (one per id), got {len(forget_calls)}"

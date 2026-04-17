@@ -122,10 +122,20 @@ Money keeps its current embedded Brain running until the new one is mature and d
 - [ ] Per-agent diary view
 
 ### Phase 5 — Benchmarks
-- [ ] Clone `xiaowu0162/LongMemEval`, write adapter
-- [ ] Run LongMemEval-s (115K tokens setting), publish score
+**Strategy** (brainstormed 2026-04-17):
+- LLM runner: Ollama (local, free) for dev loop; Claude/GPT-4o for published runs
+- Ablations: minimal — **Brain full vs ChromaDB raw baseline** (avoids MemPalace trap: their 96.6% is the embedding, not the structure). Full ablations (no gate / no graph / no decay) deferred to v2.
+- Two-phase: LongMemEval-s first (comparable, publishable), then Brain-Bench custom (concrete agent usage on Money/Marcel transcripts).
+
+**Tasks**:
+- [ ] Clone `xiaowu0162/LongMemEval`, write adapter wiring Brain HTTP API
+- [ ] Ollama-backed dev loop (Llama 3.1 70B or Qwen 2.5): iterate adapter on 50-Q subset at $0 cost
+- [ ] Run LongMemEval-s full 500 Q with Claude Opus reader + judge — publish score
+- [ ] Re-run MemPalace + mem0 with the same Claude config for apples-to-apples comparison
+- [ ] Ablation: Brain full vs ChromaDB raw — report the delta honestly
 - [ ] Target: beat mem0's 49%, aim at Zep's 63.8%
-- [ ] Add LoCoMo (snap-research/locomo)
+- [ ] Phase 5b: Brain-Bench custom — ingest Money/Marcel transcripts, design QA covering dev-agent use cases
+- [ ] Phase 5c: Add LoCoMo (snap-research/locomo)
 - [ ] Benchmark viewer page on frontend, version-over-version diff
 
 ### Phase 6 — Aggregator mode

@@ -1,0 +1,14 @@
+dataset: longmemeval_s
+subset: 50
+adapter: brain
+reader:
+  provider: ollama
+  model: llama3.1:70b
+judge:
+  provider: ollama
+  model: llama3.1:70b
+brain_url: http://localhost:8621
+chromadb_raw_persist_dir: ./runs/chromadb_raw
+output_dir: ./runs
+dry_run: false
+seed: 42

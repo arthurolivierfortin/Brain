@@ -1,0 +1,14 @@
+dataset: longmemeval_s
+subset: null
+adapter: brain
+reader:
+  provider: anthropic
+  model: claude-opus-4-7
+judge:
+  provider: anthropic
+  model: claude-opus-4-7
+brain_url: http://localhost:8621
+chromadb_raw_persist_dir: ./runs/chromadb_raw
+output_dir: ../docs/benchmarks
+dry_run: false
+seed: 42

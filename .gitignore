@@ -43,3 +43,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Benchmarks runtime artifacts
+benchmarks/external/
+benchmarks/runs/
+benchmarks/.venv/

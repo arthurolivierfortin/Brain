@@ -57,8 +57,16 @@ def load_longmemeval_s(
     n_types = len(by_type)
     per_type = max(1, subset // n_types)
     sampled: list[DatasetEntry] = []
+    leftovers: list[DatasetEntry] = []
     for group in by_type.values():
         rng.shuffle(group)
         sampled.extend(group[:per_type])
+        leftovers.extend(group[per_type:])
+
+    # Top up if short (happens when subset % n_types != 0)
+    if len(sampled) < subset:
+        rng.shuffle(leftovers)
+        sampled.extend(leftovers[: subset - len(sampled)])
+
     rng.shuffle(sampled)
     return sampled[:subset]

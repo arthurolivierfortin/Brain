@@ -1,3 +1,4 @@
+"""YAML config loader for benchmark runs."""
 from __future__ import annotations
 
 from dataclasses import dataclass

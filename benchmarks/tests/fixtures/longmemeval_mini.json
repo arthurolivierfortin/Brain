@@ -1,0 +1,73 @@
+[
+  {
+    "question_id": "q1",
+    "question_type": "single-session-assistant",
+    "question": "What is my favorite color?",
+    "answer": "blue",
+    "question_date": "2025-01-10",
+    "answer_session_ids": ["s1"],
+    "haystack_sessions": [
+      {
+        "session_id": "s1",
+        "session_date": "2025-01-05",
+        "turns": [
+          {"role": "user", "content": "My favorite color is blue."},
+          {"role": "assistant", "content": "Noted."}
+        ]
+      }
+    ]
+  },
+  {
+    "question_id": "q2",
+    "question_type": "temporal-reasoning",
+    "question": "When did I change jobs?",
+    "answer": "2024-11-01",
+    "question_date": "2025-02-01",
+    "answer_session_ids": ["s2"],
+    "haystack_sessions": [
+      {
+        "session_id": "s2",
+        "session_date": "2024-11-02",
+        "turns": [
+          {"role": "user", "content": "I started my new job yesterday, November 1st 2024."},
+          {"role": "assistant", "content": "Congrats."}
+        ]
+      }
+    ]
+  },
+  {
+    "question_id": "q3",
+    "question_type": "multi-session-reasoning",
+    "question": "What do I usually drink?",
+    "answer": "coffee",
+    "question_date": "2025-03-01",
+    "answer_session_ids": ["s3"],
+    "haystack_sessions": [
+      {"session_id": "s3", "session_date": "2025-02-01",
+       "turns": [{"role": "user", "content": "I had coffee this morning."},
+                 {"role": "assistant", "content": "Ok."}]}
+    ]
+  },
+  {
+    "question_id": "q4",
+    "question_type": "knowledge-update",
+    "question": "What city do I live in?",
+    "answer": "Montreal",
+    "question_date": "2025-04-01",
+    "answer_session_ids": ["s4"],
+    "haystack_sessions": [
+      {"session_id": "s4", "session_date": "2025-03-15",
+       "turns": [{"role": "user", "content": "I moved from Toronto to Montreal last week."},
+                 {"role": "assistant", "content": "Nice city."}]}
+    ]
+  },
+  {
+    "question_id": "q5",
+    "question_type": "abstention",
+    "question": "What is my middle name?",
+    "answer": "I don't have that information.",
+    "question_date": "2025-05-01",
+    "answer_session_ids": [],
+    "haystack_sessions": []
+  }
+]

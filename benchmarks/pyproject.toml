@@ -20,6 +20,7 @@ dev = [
     "respx>=0.21",
     "mypy>=1.10",
     "ruff>=0.6",
+    "types-tqdm>=4.66",
 ]
 
 [build-system]

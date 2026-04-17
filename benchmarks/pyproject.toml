@@ -21,6 +21,7 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.6",
     "types-tqdm>=4.66",
+    "types-PyYAML>=6.0",
 ]
 
 [build-system]

@@ -27,7 +27,7 @@ class OllamaClient:
             ],
         )
         return LLMCall(
-            text=resp.message.content,
+            text=resp.message.content or "",
             input_tokens=resp.prompt_eval_count or 0,
             output_tokens=resp.eval_count or 0,
             cost_usd=0.0,

@@ -30,6 +30,8 @@ def test_load_dev_config(tmp_path: Path):
     assert cfg.reader.model == "llama3.1:70b"
     assert cfg.brain_url == "http://localhost:8621"
     assert cfg.seed == 42
+    assert isinstance(cfg, Config)
+    assert isinstance(cfg.reader, LLMConfig)
 
 
 def test_subset_null_means_full(tmp_path: Path):
@@ -48,6 +50,7 @@ def test_subset_null_means_full(tmp_path: Path):
     """))
     cfg = load_config(p)
     assert cfg.subset is None
+    assert isinstance(cfg, Config)
 
 
 def test_invalid_adapter_raises(tmp_path: Path):

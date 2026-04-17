@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
+from datetime import UTC
 from pathlib import Path
 
 from tqdm import tqdm
@@ -152,3 +153,110 @@ def run_longmemeval(
         results.append(result)
 
     return results
+
+
+def _make_adapter(cfg):
+    if cfg.adapter == "brain":
+        from brain_bench.adapters.brain import BrainAdapter
+        return BrainAdapter(brain_url=cfg.brain_url)
+    if cfg.adapter == "chromadb_raw":
+        from brain_bench.adapters.chromadb_raw import ChromaDBRawAdapter
+        return ChromaDBRawAdapter(persist_dir=cfg.chromadb_raw_persist_dir)
+    raise ValueError(f"Unknown adapter: {cfg.adapter}")
+
+
+def _make_llm(llm_cfg):
+    if llm_cfg.provider == "ollama":
+        from brain_bench.llm.ollama import OllamaClient
+        return OllamaClient(model=llm_cfg.model)
+    if llm_cfg.provider == "anthropic":
+        from brain_bench.llm.anthropic import AnthropicClient
+        return AnthropicClient(model=llm_cfg.model)
+    raise ValueError(f"Unknown provider: {llm_cfg.provider}")
+
+
+def main() -> None:
+    import argparse
+    import subprocess
+    import time
+    from dataclasses import replace
+    from datetime import datetime
+
+    from brain_bench.config import load_config
+    from brain_bench.datasets.longmemeval import load_longmemeval_s
+    from brain_bench.metrics import aggregate
+    from brain_bench.report import append_csv_row, write_markdown_report
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--adapter", default=None,
+                        help="Override adapter from config (brain | chromadb_raw)")
+    parser.add_argument("--dataset-path", default=None, type=Path,
+                        help="Override dataset path (default: benchmarks/external/LongMemEval/...)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Run but do not write to output_dir")
+    args = parser.parse_args()
+
+    cfg = load_config(args.config)
+    if args.adapter:
+        cfg = replace(cfg, adapter=args.adapter)
+
+    dataset_path = args.dataset_path or (
+        Path("external/LongMemEval/data/longmemeval_s.json")
+    )
+    entries = load_longmemeval_s(dataset_path, subset=cfg.subset, seed=cfg.seed)
+
+    adapter = _make_adapter(cfg)
+    reader = _make_llm(cfg.reader)
+    judge = _make_llm(cfg.judge)
+
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M")
+    runs_dir = Path("runs")
+    runs_dir.mkdir(exist_ok=True)
+    log_path = runs_dir / f"{timestamp}_{cfg.adapter}.jsonl"
+
+    t0 = time.monotonic()
+    results = run_longmemeval(
+        entries=entries, adapter=adapter, reader=reader, judge=judge,
+        log_path=log_path, k=5,
+    )
+    duration = time.monotonic() - t0
+    summary = aggregate(results)
+
+    print(f"\n=== {cfg.adapter} on {len(entries)} Q ===")
+    print(f"Accuracy: {summary.accuracy:.3f}")
+    print(f"Recall@5: {summary.recall_at_k:.3f}")
+    print(f"Cost: ${summary.total_cost_usd:.2f}")
+    print(f"Duration: {duration / 60:.1f} min")
+
+    if args.dry_run or cfg.dry_run:
+        print("[dry-run] Not writing report.")
+        return
+
+    commit = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True, text=True, check=False,
+    ).stdout.strip() or "unknown"
+
+    out_dir = Path(cfg.output_dir)
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    md_path = out_dir / f"{date}-{cfg.dataset}-{cfg.adapter}.md"
+    write_markdown_report(
+        out_path=md_path, summary=summary,
+        benchmark=cfg.dataset, adapter=cfg.adapter,
+        reader=cfg.reader.model, judge=cfg.judge.model,
+        date=date, commit=commit, duration_s=duration,
+    )
+    csv_path = out_dir / "results.csv"
+    append_csv_row(
+        csv_path=csv_path, date=date, commit=commit,
+        benchmark=cfg.dataset, adapter=cfg.adapter,
+        reader=cfg.reader.model, judge=cfg.judge.model,
+        summary=summary, duration_s=duration,
+    )
+    print(f"Report: {md_path}")
+    print(f"CSV: {csv_path}")
+
+
+if __name__ == "__main__":
+    main()

@@ -18,19 +18,22 @@ from brain_bench.metrics import aggregate
 from brain_bench.report import append_csv_row, write_markdown_report
 from brain_bench.runners.longmemeval import run_longmemeval
 
-
 FIXTURE = Path(__file__).parent / "fixtures" / "longmemeval_mini.json"
 
 
 def _reader():
     r = MagicMock()
-    r.complete.return_value = LLMCall(text="my answer", input_tokens=50, output_tokens=5, cost_usd=0.001)
+    r.complete.return_value = LLMCall(
+        text="my answer", input_tokens=50, output_tokens=5, cost_usd=0.001,
+    )
     return r
 
 
 def _judge():
     j = MagicMock()
-    j.complete.return_value = LLMCall(text="CORRECT", input_tokens=20, output_tokens=2, cost_usd=0.0005)
+    j.complete.return_value = LLMCall(
+        text="CORRECT", input_tokens=20, output_tokens=2, cost_usd=0.0005,
+    )
     return j
 
 

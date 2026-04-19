@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-VALID_ADAPTERS = {"brain", "chromadb_raw"}
+VALID_ADAPTERS = {"brain", "chromadb_raw", "none"}
 VALID_PROVIDERS = {"ollama", "anthropic"}
 
 

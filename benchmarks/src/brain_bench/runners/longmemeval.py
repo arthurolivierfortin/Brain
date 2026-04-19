@@ -163,6 +163,9 @@ def _make_adapter(cfg):
     if cfg.adapter == "chromadb_raw":
         from brain_bench.adapters.chromadb_raw import ChromaDBRawAdapter
         return ChromaDBRawAdapter(persist_dir=cfg.chromadb_raw_persist_dir)
+    if cfg.adapter == "none":
+        from brain_bench.adapters.no_memory import NoMemoryAdapter
+        return NoMemoryAdapter()
     raise ValueError(f"Unknown adapter: {cfg.adapter}")
 
 
@@ -191,7 +194,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--adapter", default=None,
-                        help="Override adapter from config (brain | chromadb_raw)")
+                        help="Override adapter from config (brain | chromadb_raw | none)")
     parser.add_argument("--dataset-path", default=None, type=Path,
                         help="Override dataset path (default: benchmarks/external/LongMemEval/...)")
     parser.add_argument("--dry-run", action="store_true",

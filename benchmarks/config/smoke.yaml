@@ -1,0 +1,17 @@
+# Smoke test — reproduces the 2026-04-19 run documented in issue #3.
+# Pipeline-only check (5 Q on mini fixture, qwen2.5:0.5b). Numbers NOT meaningful
+# (0.5B judge is too permissive). dry_run blocks writes to docs/benchmarks/.
+dataset: longmemeval_s
+subset: 5
+adapter: brain
+reader:
+  provider: ollama
+  model: qwen2.5:0.5b
+judge:
+  provider: ollama
+  model: qwen2.5:0.5b
+brain_url: http://localhost:8621
+chromadb_raw_persist_dir: ./runs/chromadb_raw
+output_dir: ./runs
+dry_run: true
+seed: 42

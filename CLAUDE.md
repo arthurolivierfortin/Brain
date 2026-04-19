@@ -41,11 +41,51 @@ Brain was extracted from [Money](https://github.com/arthurolivierfortin/Money), 
 - MCP-first exposure
 - Local mode default, aggregator mode opt-in
 
+## Traceability — issue-first workflow (MANDATORY)
+
+Every non-trivial piece of work MUST have a GitHub issue opened **before** code. This is how we get "research-lab" traceability: every hypothesis, result, and decision ends up on an immutable URL.
+
+- **Non-trivial** = anything that isn't a typo fix or a one-line doc correction. Bug investigations, features, benchmark runs, design decisions — all issues.
+- **Bug found during a run?** → one issue per bug, immediately. Link the bug to the run artifact (JSONL path + commit SHA).
+- **Benchmark run?** → issue with config used, dataset, scores, cost, duration. Commit the JSONL + markdown report, reference them in the issue.
+- **Every PR** references its issue via `Closes #N` or `Refs #N`. No exception.
+- **Labels**: `bug`, `feature`, `bench`, `docs`, `chore`, `research`. `area/backend`, `area/benchmarks`, `area/docker`, `area/docs`, `area/frontend`, `area/mcp`.
+- **Design docs** live in `docs/specs/` and `docs/plans/`. The issue links to them, not the other way around — git is the source of truth, issues are the discussion log.
+
+Rationale: Brain is a research project as much as an engineering one. Scores, ablations, and reversed decisions need to be discoverable 6 months later without spelunking session logs.
+
+## Documentation structure (MANDATORY)
+
+All docs live under `docs/`. No doc file at the root of `docs/` except `README.md` (the master index).
+
+```
+docs/
+├── README.md                  # master index — what each folder contains
+├── architecture/              # durable design decisions (system shape, modules, data flow)
+├── research/                  # competitive analysis, external benchmark studies
+├── specs/                     # YYYY-MM-DD-<topic>-design.md (brainstorming outputs)
+├── plans/                     # YYYY-MM-DD-<topic>-implementation.md (plan skill outputs)
+├── runbooks/                  # "how to start Brain locally", "how to run a bench", troubleshooting
+├── benchmarks/                # published run reports (markdown) + results.csv
+├── improvements/              # tracked technical debt, one file per item when it grows
+└── decisions/                 # ADR-style records: NNNN-<slug>.md, why we chose X over Y
+```
+
+**Rules:**
+- Each subfolder has a `README.md` = index + naming convention + what-goes-here.
+- Every PR that changes observable behavior MUST touch the relevant doc(s). Reviewer blocks the merge otherwise. Doc-freshness > doc-volume.
+- Specs and plans are **append-only** history. Don't edit a merged spec — write a new dated spec if the design evolves. Issues/ADRs cross-link the delta.
+- ADRs are numbered (`0001`, `0002`, …) and never renumbered. Supersede by writing a new ADR that references the old one as `Supersedes: 0003`.
+- No doc lives in `benchmarks/` (code) or `backend/` except READMEs for that code unit's consumers. Long-form docs go in `docs/`.
+
+**Deferred:** A separate docs site (mkdocs/Docusaurus) lands when `docs/` exceeds ~30 files OR when an external consumer (Marcel) starts depending on Brain.
+
 ## How to start a task (every time)
 
 1. **Read STATUS**: `git log --oneline -10` to see recent work.
 2. **Re-read the relevant README section** — it's the source of truth for decisions.
-3. **Write a short plan**:
+3. **Open or reference a GitHub issue** for the task (see traceability rules above).
+4. **Write a short plan**:
    - What am I trying to accomplish? (one sentence)
    - Steps (numbered)
    - Files touched

@@ -2,11 +2,16 @@
 status: open
 owner: core
 created: 2026-04-16
+updated: 2026-04-19
 ---
 
 # Improvements backlog
 
 Dettes connues, tranchées au moment de l'extraction de Money. Ordre = priorité descendante.
+
+## When to extract to its own file
+
+If an item grows past ~10 lines, needs its own ADR reference, or gets actively worked on → extract to `docs/improvements/<slug>.md` and leave a one-line pointer here. Keep this file scannable in one screen.
 
 ## P0 — Types dynamiques (vrai cerveau)
 

@@ -48,7 +48,7 @@ brain/
 - MCP-first: 5 tools currently (`brain_store`, `brain_search`, `brain_related`, `brain_forget`, `brain_stats`). 29-tool expansion is phase-improvement.
 - UI modes: **local** (per-repo drop-in, default) + **aggregator** (multi-brain, opt-in)
 
-**Deferred to phase-improvement** (see [docs/improvements.md](docs/improvements.md)):
+**Deferred to phase-improvement** (see [docs/improvements/](docs/improvements/)):
 - Dynamic types — current `MemoryType` enum and gate `_NOISE_TYPES`/`_SIGNIFICANT_TYPES` frozensets are trading-biased hardcoded. Target: emerge from usage.
 - Bi-temporal facts with validity windows (stolen from Graphiti)
 - L0/L1/L2/L3 context layering (~170 token wake-up)

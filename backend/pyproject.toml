@@ -44,7 +44,7 @@ warn_unused_configs = true
 mypy_path = "src"
 # Phase 1 = extraction from Money legacy. mypy strict disabled here (82 errs strict,
 # 36 with check_untyped_defs). 143/143 pytest pass = functional correctness.
-# Strict re-enablement tracked in docs/improvements.md (P2).
+# Strict re-enablement tracked in docs/improvements/ (P2).
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

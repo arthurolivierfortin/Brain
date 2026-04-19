@@ -28,6 +28,17 @@ logger = logging.getLogger(__name__)
 
 # Use /data/chromadb in containers (Docker volume), data/chromadb locally
 DEFAULT_PERSIST_DIR = "/data/chromadb" if Path("/data").exists() else "data/chromadb"
+
+# ChromaDB metadata keys owned by Brain itself (not overwritable by caller-
+# supplied metadata). Anything else in the input `metadata` dict that is a
+# scalar (str/int/float/bool) gets persisted alongside and surfaced back in
+# search results under a nested `metadata` dict.
+RESERVED_META_KEYS: frozenset[str] = frozenset({
+    "agent", "memory_type", "created_at", "access_count", "confidence",
+    "sentiment", "level", "symbols", "strategies", "concepts", "links",
+    "source", "dedup_key", "superseded", "consolidated_into", "superseded_by",
+    "occurrence_count", "event_type",
+})
 COLLECTION_NAME = "brain"
 
 # Composite scoring: decay constant in days per hierarchy level
@@ -148,6 +159,14 @@ class BrainStore:
         if "source" in metadata:
             chroma_meta["source"] = metadata["source"]
 
+        # Preserve caller-supplied metadata (e.g. session_id from benchmarks).
+        # Only scalars — ChromaDB rejects nested structures.
+        for key, value in metadata.items():
+            if key in RESERVED_META_KEYS:
+                continue
+            if isinstance(value, (str, int, float, bool)):
+                chroma_meta[key] = value
+
         # Contradiction detection: check for semantically similar entries
         # with opposite sentiment before storing
         self._detect_contradictions(content, enriched.sentiment, entry_id)
@@ -260,6 +279,9 @@ class BrainStore:
                 "source": meta.get("source", ""),
                 "superseded": meta.get("superseded", False),
                 "consolidated_into": meta.get("consolidated_into", ""),
+                "metadata": {
+                    k: v for k, v in meta.items() if k not in RESERVED_META_KEYS
+                },
             })
 
         # Graph-augmented search: expand with 1-hop neighbors
@@ -303,6 +325,10 @@ class BrainStore:
                             "source": nmeta.get("source", ""),
                             "superseded": nmeta.get("superseded", False),
                             "consolidated_into": nmeta.get("consolidated_into", ""),
+                            "metadata": {
+                                k: v for k, v in nmeta.items()
+                                if k not in RESERVED_META_KEYS
+                            },
                         })
                 except Exception as e:
                     logger.debug("Graph neighbor fetch failed: %s", e)
@@ -329,8 +355,8 @@ class BrainStore:
         # Combine: principles first, then rest by score
         ranked = principles + rest
 
-        # Truncate to max_results
-        ranked = ranked[:max_results]
+        # Honor caller's top_k; max_results remains a safety ceiling.
+        ranked = ranked[:min(top_k, max_results)]
 
         # Reinforce returned entries
         for entry in ranked:

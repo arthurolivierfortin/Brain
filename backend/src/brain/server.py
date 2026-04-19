@@ -294,6 +294,11 @@ def create_http_app():
                 except Exception as e:
                     logger.error("Consolidation failed: %s", e)
                     self._json_response({"error": str(e)}, status=500)
+            elif self.path == "/reset":
+                store = get_store()
+                agent = data.get("agent")
+                deleted = store.reset(agent=agent)
+                self._json_response({"deleted": deleted, "agent": agent or "ALL"})
             else:
                 self._json_response({"error": "not found"}, status=404)
 

@@ -814,3 +814,41 @@ class TestCustomMetadataAndTopK:
             )
         results = store.search("hiking", top_k=100, reinforce=False)
         assert len(results) == 3
+
+
+class TestReset:
+    """Regression coverage for issue #5 — reset() must actually wipe memories."""
+
+    def test_reset_without_filter_wipes_everything(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        for i in range(4):
+            store.store(f"memory {i}", agent=f"agent-{i}", memory_type="context", skip_gate=True)
+        assert store.stats()["total"] == 4
+        deleted = store.reset()
+        assert deleted == 4
+        assert store.stats()["total"] == 0
+
+    def test_reset_scoped_to_agent(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("alpha-1", agent="alpha", memory_type="context", skip_gate=True)
+        store.store("alpha-2", agent="alpha", memory_type="context", skip_gate=True)
+        store.store("beta-1", agent="beta", memory_type="context", skip_gate=True)
+        assert store.stats()["total"] == 3
+
+        deleted = store.reset(agent="alpha")
+        assert deleted == 2
+        stats = store.stats()
+        assert stats["total"] == 1
+        assert stats["agents"] == {"beta": 1}
+
+    def test_reset_on_empty_collection_is_noop(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        assert store.reset() == 0
+        assert store.reset(agent="whatever") == 0
+
+    def test_reset_unknown_agent_is_noop(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("content", agent="alpha", memory_type="context", skip_gate=True)
+        deleted = store.reset(agent="beta")
+        assert deleted == 0
+        assert store.stats()["total"] == 1

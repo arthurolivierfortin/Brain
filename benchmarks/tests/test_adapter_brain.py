@@ -49,16 +49,24 @@ def test_retrieve_returns_memories():
 
 
 @respx.mock
-def test_reset_calls_forget_all():
-    # Spec: reset clears Brain's collection via a (to-be-added) endpoint.
-    # For v1 we call /stats and forget each entry one by one (slow, OK for 500 Q).
-    respx.get("http://brain:8611/stats").mock(
-        return_value=Response(200, json={"ids": ["m1", "m2"]})
-    )
-    respx.post("http://brain:8611/forget").mock(
-        return_value=Response(200, json={"forgotten": True})
+def test_reset_posts_to_reset_endpoint_scoped_to_agent():
+    respx.post("http://brain:8611/reset").mock(
+        return_value=Response(200, json={"deleted": 7, "agent": "longmemeval"})
     )
     adapter = BrainAdapter(brain_url="http://brain:8611")
     adapter.reset()
-    forget_calls = [c for c in respx.calls if "/forget" in str(c.request.url)]
-    assert len(forget_calls) == 2, f"expected 2 /forget calls (one per id), got {len(forget_calls)}"
+    assert respx.calls.call_count == 1
+    body = json.loads(respx.calls[0].request.content)
+    assert body == {"agent": "longmemeval"}
+
+
+@respx.mock
+def test_reset_raises_on_http_error():
+    """A silent reset failure would poison benchmark integrity (leaky state)."""
+    from httpx import HTTPStatusError
+    respx.post("http://brain:8611/reset").mock(
+        return_value=Response(500, json={"error": "boom"})
+    )
+    adapter = BrainAdapter(brain_url="http://brain:8611")
+    with pytest.raises(HTTPStatusError):
+        adapter.reset()

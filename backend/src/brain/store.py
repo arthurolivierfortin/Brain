@@ -737,6 +737,36 @@ class BrainStore:
             logger.warning("Brain forget failed for %s: %s", entry_id, e)
             return False
 
+    def reset(self, agent: str | None = None) -> int:
+        """Delete memories in bulk. Returns the count deleted.
+
+        When `agent` is given, deletes only that agent's memories. Without
+        filter, wipes the entire collection — intended for test/benchmark
+        isolation, never for production use on a live Brain.
+        """
+        if agent is not None:
+            results = self._collection.get(
+                where={"agent": {"$eq": agent}},
+                include=[],
+            )
+            ids = results.get("ids") or []
+            if not ids:
+                return 0
+            self._collection.delete(ids=ids)
+        else:
+            all_ids = self._collection.get(include=[]).get("ids") or []
+            if not all_ids:
+                return 0
+            self._collection.delete(ids=all_ids)
+            ids = all_ids
+
+        self.invalidate_graph()
+        self._events.log(
+            event_type="archived",
+            details=f"reset {len(ids)} entries (agent={agent or 'ALL'})",
+        )
+        return len(ids)
+
     def stats(self) -> dict:
         """Get brain statistics."""
         count = self._collection.count()

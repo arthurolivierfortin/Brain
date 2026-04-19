@@ -9,31 +9,32 @@ from brain_bench.types import Memory, Session
 class BrainAdapter:
     """Uses Brain's HTTP API (localhost:8621 in docker compose setup)."""
 
+    _AGENT = "longmemeval"
+
     def __init__(self, brain_url: str, timeout: float = 30.0) -> None:
         self._url = brain_url.rstrip("/")
         self._client = httpx.Client(timeout=timeout)
 
     def reset(self) -> None:
-        """Forget every memory currently stored.
+        """Wipe the longmemeval agent's memories between dataset entries.
 
-        For phase 5a we iterate and forget per entry. A bulk /reset
-        endpoint on Brain is a future improvement. Errors on /stats or
-        /forget raise — a silent failure here would poison benchmark
-        integrity (leftover memories from the previous entry).
+        Uses Brain's POST /reset endpoint scoped to this adapter's agent so
+        that unrelated memories in the same Brain instance are not touched.
+        A failure here would silently pollute subsequent entries — so we
+        raise, never swallow.
         """
-        resp = self._client.get(f"{self._url}/stats")
+        resp = self._client.post(
+            f"{self._url}/reset",
+            json={"agent": self._AGENT},
+        )
         resp.raise_for_status()
-        ids = resp.json().get("ids", [])
-        for mid in ids:
-            forget_resp = self._client.post(f"{self._url}/forget", json={"id": mid})
-            forget_resp.raise_for_status()
 
     def ingest(self, session: Session) -> None:
         for i, turn in enumerate(session.turns):
             content = f"[{turn.role}] {turn.content}"
             payload = {
                 "content": content,
-                "agent": "longmemeval",
+                "agent": self._AGENT,
                 "memory_type": "context",
                 "metadata": {
                     "session_id": session.session_id,

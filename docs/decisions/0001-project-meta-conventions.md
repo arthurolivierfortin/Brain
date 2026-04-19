@@ -74,6 +74,6 @@ The driving goal is "research-project traceability": decisions, hypotheses, resu
 
 ## Follow-up actions
 
-- [ ] Retroactively open issues for the 2 Brain bugs surfaced during the 2026-04-19 smoke run (metadata not preserved through `/search`, `top_k` ignored).
-- [ ] Retroactively open an issue for the smoke run itself, with the JSONL path + qwen2.5:0.5b judge caveat documented.
+- [x] Retroactively open issues for the 2 Brain bugs surfaced during the 2026-04-19 smoke run — #1 (metadata), #2 (top_k).
+- [x] Retroactively open an issue for the smoke run itself — #3.
 - [ ] Write `bench-analyzer` agent after phase 5a branch merges to main.

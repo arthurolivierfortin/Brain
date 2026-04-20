@@ -117,11 +117,11 @@ Money keeps its current embedded Brain running until the new one is mature and d
 **Why this exists** (brainstormed 2026-04-19): MCP tools let the model *ask* Brain for memories. Hooks let Brain *automatically* inject context at session start and *automatically* capture memories at turn end — no tool call required. This is what separates "memory API" from "cerveau parfait".
 
 **MVP scope** (2 hooks of 6, L0/L1 hardcoded, CC reference implementation):
-- [ ] Spec: agnostic hook contract — `POST /hook/wake_up`, `POST /hook/post_turn` (JSON in/out). See `docs/specs/YYYY-MM-DD-hook-architecture-design.md` once written.
-- [ ] Backend: `/hook/wake_up` returns L0 (tag=identity) + L1 (tag=preference) memories formatted for system-prompt injection, 500-token budget
-- [ ] Backend: `/hook/post_turn` extracts facts via LLM (default Gemini Flash, configurable), feeds through existing gate + dedup, stores typed memories
-- [ ] `Extractor` Protocol + Gemini Flash implementation, output schema `{memories: [{content, type, tags, confidence}]}`
-- [ ] Claude Code adapter: `SessionStart` hook → `wake_up`; `Stop` hook → `post_turn`. Replaces the current `brain_hook.py`.
+- [x] Spec: agnostic hook contract — `POST /hook/wake_up`, `POST /hook/post_turn` (JSON in/out). See `docs/specs/2026-04-19-hook-architecture-design.md`.
+- [x] Backend: `/hook/wake_up` returns L0 (tag=identity) + L1 (tag=preference) memories formatted for system-prompt injection, 500-token budget
+- [x] Backend: `/hook/post_turn` extracts facts via LLM (default Gemini Flash, configurable), feeds through existing gate + dedup, stores typed memories
+- [x] `Extractor` Protocol + Gemini Flash implementation, output schema `{memories: [{content, type, tags, confidence}]}`
+- [x] Claude Code adapter: `SessionStart` hook → `wake_up`; `Stop` hook → `post_turn`. Replaces the current `brain_hook.py`.
 - [ ] Dogfood on Brain sessions for ≥7 days, verify cerveau-parfait effect in practice
 
 **Deferred post-MVP** (each becomes its own spec):

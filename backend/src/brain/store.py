@@ -39,6 +39,12 @@ RESERVED_META_KEYS: frozenset[str] = frozenset({
     "source", "dedup_key", "superseded", "consolidated_into", "superseded_by",
     "occurrence_count", "event_type",
 })
+
+# Reserved keys that the caller IS allowed to override via metadata=.
+# Split from RESERVED_META_KEYS because confidence must still be excluded from
+# the nested `metadata` dict at read time (it's surfaced as a top-level field),
+# but PostTurnHandler's raw-fallback relies on confidence=0.3 persisting.
+_CALLER_OVERRIDABLE_META_KEYS: frozenset[str] = frozenset({"confidence"})
 COLLECTION_NAME = "brain"
 
 # Composite scoring: decay constant in days per hierarchy level
@@ -162,7 +168,7 @@ class BrainStore:
         # Preserve caller-supplied metadata (e.g. session_id from benchmarks).
         # Only scalars — ChromaDB rejects nested structures.
         for key, value in metadata.items():
-            if key in RESERVED_META_KEYS:
+            if key in RESERVED_META_KEYS and key not in _CALLER_OVERRIDABLE_META_KEYS:
                 continue
             if isinstance(value, (str, int, float, bool)):
                 chroma_meta[key] = value

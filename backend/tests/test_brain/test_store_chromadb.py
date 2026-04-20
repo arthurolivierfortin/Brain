@@ -815,6 +815,26 @@ class TestCustomMetadataAndTopK:
         results = store.search("hiking", top_k=100, reinforce=False)
         assert len(results) == 3
 
+    def test_caller_confidence_overrides_default(self, tmp_path: Path):
+        """Phase 2b PostTurnHandler raw-fallback relies on confidence=0.3 to be persisted.
+
+        Regression guard: before the fix, 'confidence' was in RESERVED_META_KEYS and
+        the caller's value was silently dropped — every memory ended up with confidence=1.0.
+        """
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store(
+            content="raw fallback content that's long enough to clear the gate",
+            agent="t",
+            memory_type="raw-fallback",
+            metadata={"confidence": 0.3, "session_id": "s1"},
+            skip_gate=True,
+        )
+        results = store.search("raw fallback")
+        assert len(results) == 1
+        assert results[0]["confidence"] == 0.3, (
+            f"confidence must round-trip from metadata arg, got {results[0]['confidence']}"
+        )
+
 
 class TestReset:
     """Regression coverage for issue #5 — reset() must actually wipe memories."""

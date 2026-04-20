@@ -1,11 +1,21 @@
 """One-off bootstrap — store initial identity/preference memories for dogfood.
 
 Run once after the hook endpoints are live and before the first dogfood session.
-Idempotent: safe to re-run (the store's dedup gate handles duplicates).
+
+**Not idempotent** — the current gate only dedupes `event_type="error"` memories,
+so re-running this script duplicates every seed. Before re-running (e.g. after a
+schema change or a Brain wipe), first clear the agent scope:
+
+    curl -X POST http://localhost:8621/reset \\
+         -H 'Content-Type: application/json' \\
+         -d '{"agent":"brain"}'
+
+Content-hash dedup for context memories is tracked as a follow-up improvement.
 """
 from __future__ import annotations
 
 import os
+import sys
 
 import httpx
 
@@ -36,6 +46,7 @@ SEEDS: list[dict] = [
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     seeded = 0
     for seed in SEEDS:
         payload = {
@@ -46,7 +57,7 @@ def main() -> None:
             "skip_gate": False,
         }
         try:
-            resp = httpx.post(f"{BRAIN_URL}/store", json=payload, timeout=5.0)
+            resp = httpx.post(f"{BRAIN_URL}/store", json=payload, timeout=30.0)
             resp.raise_for_status()
             body = resp.json()
             if body.get("stored"):

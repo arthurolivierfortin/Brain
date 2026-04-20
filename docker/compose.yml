@@ -19,6 +19,7 @@ services:
       BRAIN_MCP_PORT: "8610"
       BRAIN_PERSIST_DIR: /data/chromadb
       BRAIN_SERVICE_HOST: brain
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     restart: unless-stopped
 
 volumes:

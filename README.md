@@ -33,9 +33,11 @@ brain/
 ├── installer/        # Node script — npx brain
 ├── benchmarks/       # LongMemEval, LoCoMo harness + results
 ├── scripts/          # Client-side hooks (copy into consumer repos)
-│   ├── brain_hook.py         # Claude Code Stop hook — POST session delta
+│   ├── brain_wake_up.py      # Claude Code SessionStart hook — inject L0/L1 context
+│   ├── brain_post_turn.py    # Claude Code Stop hook — POST structured turn delta
 │   ├── brain_statusline.py   # Claude Code statusLine — branch + ctx + brain state
-│   └── brain_save_now.py     # Manual mid-session save trigger
+│   ├── brain_save_now.py     # Manual mid-session save trigger
+│   └── seed_brain.py         # One-off bootstrap of identity/preference memories
 └── docs/
     └── research/             # Competitive analysis
 ```
@@ -176,7 +178,7 @@ Money keeps its current embedded Brain running until the new one is mature and d
 **Money** (`C:\Money`) — parent repo. Has:
 - Legacy embedded Brain service (Python, port 8611) — the source we extracted from
 - `.claude/settings.json` — reference for this repo's config
-- `scripts/brain_hook.py` / `scripts/brain_statusline.py` — already copied here
+- `scripts/brain_statusline.py` was copied here; the Stop-hook script has since been rewritten (`scripts/brain_post_turn.py`) to talk to the new `/hook/post_turn` contract
 
 **Marcel** (`C:\Marcel`) — planned consumer. Next.js app. Will use `npx brain` once the installer lands.
 

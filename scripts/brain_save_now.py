@@ -1,7 +1,8 @@
 """Manually trigger brain save for the current Claude Code session.
 
 Discovers the active session by finding the most recently modified
-transcript file, then runs brain_hook.main() with the right parameters.
+transcript file, then runs brain_post_turn.main() with the right
+parameters (same stdin_data shape the Stop hook would receive).
 
 Usage: ! python scripts/brain_save_now.py
 """
@@ -59,18 +60,16 @@ def main() -> None:
     os.chdir(project_root)
 
     sys.path.insert(0, str(project_root / "scripts"))
-    from brain_hook import main as hook_main
+    from brain_post_turn import main as hook_main
 
     stdin_data = json.dumps({
         "session_id": session_id,
         "transcript_path": str(transcript_path),
+        "cwd": str(project_root),
     })
 
-    success = hook_main(stdin_data=stdin_data)
-    if success:
-        print("brain-save: done", file=sys.stderr)
-    else:
-        print("brain-save: skipped (delta too small)", file=sys.stderr)
+    hook_main(stdin_data=stdin_data)
+    print("brain-save: triggered", file=sys.stderr)
 
 
 if __name__ == "__main__":

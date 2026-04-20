@@ -133,8 +133,8 @@ No agent has been built for Brain yet. For now: feature branch → push → `gh 
 
 - **Brain standalone HTTP API** — `http://localhost:8621` (this repo's Docker service, host-port 8621→container 8611). MCP SSE on `http://localhost:8620`.
 - **Money legacy Brain** — `http://localhost:8611` (Money's embedded Brain, still running until the dogfood cutover). Do NOT confuse with this repo's service.
-- **Gemini Flash** — summarizes Claude Code session deltas in `scripts/brain_hook.py` (`GOOGLE_API_KEY` env var)
-- **Claude Code statusLine + Stop hook** — `.claude/settings.json` wires them up
+- **Gemini Flash** — extracts structured memories from Claude Code turn deltas inside Brain backend (`GeminiFlashExtractor`, `GOOGLE_API_KEY` env var passed into the Docker container)
+- **Claude Code statusLine + SessionStart + Stop hooks** — `.claude/settings.json` wires them to `scripts/brain_statusline.py`, `scripts/brain_wake_up.py`, `scripts/brain_post_turn.py`
 
 ## Subagent rules
 

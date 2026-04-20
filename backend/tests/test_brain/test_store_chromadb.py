@@ -852,3 +852,70 @@ class TestReset:
         deleted = store.reset(agent="beta")
         assert deleted == 0
         assert store.stats()["total"] == 1
+
+
+class TestSearchByTag:
+    """search_by_tag — powers wake_up L0/L1 retrieval."""
+
+    def test_returns_memories_with_matching_tag(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("I'm Arthur, French-first", agent="brain-dev",
+                    memory_type="context",
+                    metadata={"tags": "identity,persona"}, skip_gate=True)
+        store.store("Unrelated note", agent="brain-dev",
+                    memory_type="context",
+                    metadata={"tags": "bug"}, skip_gate=True)
+        results = store.search_by_tag("identity", agent="brain-dev")
+        assert len(results) == 1
+        assert "Arthur" in results[0]["content"]
+
+    def test_scopes_to_agent(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("A1", agent="brain-dev", memory_type="context",
+                    metadata={"tags": "identity"}, skip_gate=True)
+        store.store("A2", agent="money-dev", memory_type="context",
+                    metadata={"tags": "identity"}, skip_gate=True)
+        results = store.search_by_tag("identity", agent="brain-dev")
+        assert len(results) == 1
+        assert results[0]["content"] == "A1"
+
+    def test_respects_top_k(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        for i in range(7):
+            store.store(f"pref {i}", agent="t", memory_type="context",
+                        metadata={"tags": "preference"}, skip_gate=True)
+        results = store.search_by_tag("preference", agent="t", top_k=3)
+        assert len(results) == 3
+
+    def test_orders_by_access_count_desc(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("low-access", agent="t", memory_type="context",
+                    metadata={"tags": "identity"}, skip_gate=True)
+        r_high = store.store("high-access", agent="t", memory_type="context",
+                              metadata={"tags": "identity"}, skip_gate=True)
+        # Manually bump access_count on r_high
+        raw = store._collection.get(ids=[r_high["id"]], include=["metadatas"])
+        meta = raw["metadatas"][0] or {}
+        store._collection.update(ids=[r_high["id"]],
+                                 metadatas=[{**meta, "access_count": 10}])
+        results = store.search_by_tag("identity", agent="t")
+        assert results[0]["content"] == "high-access"
+        assert results[1]["content"] == "low-access"
+
+    def test_substring_matches_namespaced_tag(self, tmp_path: Path):
+        """identity-core should match a search for identity (tag namespacing)."""
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("namespaced", agent="t", memory_type="context",
+                    metadata={"tags": "identity-core,persona"}, skip_gate=True)
+        results = store.search_by_tag("identity", agent="t")
+        assert len(results) == 1
+
+    def test_empty_collection_returns_empty(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        assert store.search_by_tag("identity", agent="t") == []
+
+    def test_no_match_returns_empty(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("content", agent="t", memory_type="context",
+                    metadata={"tags": "bug"}, skip_gate=True)
+        assert store.search_by_tag("identity", agent="t") == []

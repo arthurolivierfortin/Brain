@@ -1,3 +1,5 @@
+name: brain
+
 services:
   brain:
     build:
@@ -5,8 +7,11 @@ services:
       dockerfile: docker/Dockerfile.brain
     container_name: brain
     ports:
-      - "8610:8610"
-      - "8611:8611"
+      # Host 8620/8621 to avoid collision with money-brain (8610/8611).
+      # Internal service still listens on 8610/8611; update BRAIN_URL clients
+      # to http://host.docker.internal:8621 (or use compose network).
+      - "8620:8610"
+      - "8621:8611"
     volumes:
       - brain-chromadb:/data/chromadb
     environment:

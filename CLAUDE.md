@@ -41,11 +41,51 @@ Brain was extracted from [Money](https://github.com/arthurolivierfortin/Money), 
 - MCP-first exposure
 - Local mode default, aggregator mode opt-in
 
+## Traceability — issue-first workflow (MANDATORY)
+
+Every non-trivial piece of work MUST have a GitHub issue opened **before** code. This is how we get "research-lab" traceability: every hypothesis, result, and decision ends up on an immutable URL.
+
+- **Non-trivial** = anything that isn't a typo fix or a one-line doc correction. Bug investigations, features, benchmark runs, design decisions — all issues.
+- **Bug found during a run?** → one issue per bug, immediately. Link the bug to the run artifact (JSONL path + commit SHA).
+- **Benchmark run?** → issue with config used, dataset, scores, cost, duration. Commit the JSONL + markdown report, reference them in the issue.
+- **Every PR** references its issue via `Closes #N` or `Refs #N`. No exception.
+- **Labels**: `bug`, `feature`, `bench`, `docs`, `chore`, `research`. `area/backend`, `area/benchmarks`, `area/docker`, `area/docs`, `area/frontend`, `area/mcp`.
+- **Design docs** live in `docs/specs/` and `docs/plans/`. The issue links to them, not the other way around — git is the source of truth, issues are the discussion log.
+
+Rationale: Brain is a research project as much as an engineering one. Scores, ablations, and reversed decisions need to be discoverable 6 months later without spelunking session logs.
+
+## Documentation structure (MANDATORY)
+
+All docs live under `docs/`. No doc file at the root of `docs/` except `README.md` (the master index).
+
+```
+docs/
+├── README.md                  # master index — what each folder contains
+├── architecture/              # durable design decisions (system shape, modules, data flow)
+├── research/                  # competitive analysis, external benchmark studies
+├── specs/                     # YYYY-MM-DD-<topic>-design.md (brainstorming outputs)
+├── plans/                     # YYYY-MM-DD-<topic>-implementation.md (plan skill outputs)
+├── runbooks/                  # "how to start Brain locally", "how to run a bench", troubleshooting
+├── benchmarks/                # published run reports (markdown) + results.csv
+├── improvements/              # tracked technical debt, one file per item when it grows
+└── decisions/                 # ADR-style records: NNNN-<slug>.md, why we chose X over Y
+```
+
+**Rules:**
+- Each subfolder has a `README.md` = index + naming convention + what-goes-here.
+- Every PR that changes observable behavior MUST touch the relevant doc(s). Reviewer blocks the merge otherwise. Doc-freshness > doc-volume.
+- Specs and plans are **append-only** history. Don't edit a merged spec — write a new dated spec if the design evolves. Issues/ADRs cross-link the delta.
+- ADRs are numbered (`0001`, `0002`, …) and never renumbered. Supersede by writing a new ADR that references the old one as `Supersedes: 0003`.
+- No doc lives in `benchmarks/` (code) or `backend/` except READMEs for that code unit's consumers. Long-form docs go in `docs/`.
+
+**Deferred:** A separate docs site (mkdocs/Docusaurus) lands when `docs/` exceeds ~30 files OR when an external consumer (Marcel) starts depending on Brain.
+
 ## How to start a task (every time)
 
 1. **Read STATUS**: `git log --oneline -10` to see recent work.
 2. **Re-read the relevant README section** — it's the source of truth for decisions.
-3. **Write a short plan**:
+3. **Open or reference a GitHub issue** for the task (see traceability rules above).
+4. **Write a short plan**:
    - What am I trying to accomplish? (one sentence)
    - Steps (numbered)
    - Files touched
@@ -91,7 +131,8 @@ No agent has been built for Brain yet. For now: feature branch → push → `gh 
 
 ## External systems this repo talks to
 
-- **Brain HTTP API** — `http://localhost:8611` (Money's current Brain, used for dogfooding until we extract our own)
+- **Brain standalone HTTP API** — `http://localhost:8621` (this repo's Docker service, host-port 8621→container 8611). MCP SSE on `http://localhost:8620`.
+- **Money legacy Brain** — `http://localhost:8611` (Money's embedded Brain, still running until the dogfood cutover). Do NOT confuse with this repo's service.
 - **Gemini Flash** — summarizes Claude Code session deltas in `scripts/brain_hook.py` (`GOOGLE_API_KEY` env var)
 - **Claude Code statusLine + Stop hook** — `.claude/settings.json` wires them up
 
@@ -116,7 +157,20 @@ No agent has been built for Brain yet. For now: feature branch → push → `gh 
 
 1. Never claim "the benchmark passes" without showing the score output.
 2. Never claim "tests pass" without pasting the runner output.
-3. Never claim "Brain is running" without showing a successful healthcheck (`curl localhost:8611/health`).
+3. Never claim "Brain is running" without showing a successful healthcheck (`curl localhost:8621/health` for this repo's standalone Brain).
+
+## Docker safety — non-negotiable invariants
+
+Context: on 2026-04-17 an agent ran `docker compose --project-name docker --remove-orphans down` from `C:/Brain/docker/` and wiped 10 Money containers (volumes survived, images cached). The project name `docker` was derived from the parent directory and collided with Money's `C:/Money/docker/` compose. **Never repeat this.**
+
+1. **Every compose.yml MUST start with `name: <explicit>` at top level.** Never let the project name be inferred from the directory (directories named `docker/` collide across repos).
+2. **`--remove-orphans` is destructive cross-project.** Forbidden unless:
+   - `docker compose ls` has been inspected
+   - `docker compose config` confirms the target project name
+   - The user has explicitly approved after seeing the orphan list
+3. **Any "Found orphan containers [...]" warning = STOP.** Read the list. If any container outside the current repo appears, the project namespace is contaminated — fix `name:` and retry. Never force through.
+4. **`--project-name` flag: never pass a name that is not unique to this repo.** If you need to operate on another project's containers, `cd` into that repo and use its compose file.
+5. **Transparency over silent recovery.** If a destructive action leaks across projects, tell the user immediately, list the exact impact (containers lost, volumes touched, data state), and wait for instructions. Never "fix it quietly".
 
 ## What a fresh agent should do first
 

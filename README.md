@@ -29,7 +29,7 @@ brain/
 ├── backend/          # Python (FastAPI) — HTTP API + MCP server
 ├── frontend/         # Next.js 15 + Tailwind + shadcn — memory browser, graph viz
 ├── docker/
-│   └── compose.yml   # backend:8611, frontend:8700
+│   └── compose.yml   # backend host-port 8621 (→8611 internal), MCP 8620 (→8610). Frontend port TBD (phase 4).
 ├── installer/        # Node script — npx brain
 ├── benchmarks/       # LongMemEval, LoCoMo harness + results
 ├── scripts/          # Client-side hooks (copy into consumer repos)
@@ -48,7 +48,7 @@ brain/
 - MCP-first: 5 tools currently (`brain_store`, `brain_search`, `brain_related`, `brain_forget`, `brain_stats`). 29-tool expansion is phase-improvement.
 - UI modes: **local** (per-repo drop-in, default) + **aggregator** (multi-brain, opt-in)
 
-**Deferred to phase-improvement** (see [docs/improvements.md](docs/improvements.md)):
+**Deferred to phase-improvement** (see [docs/improvements/](docs/improvements/)):
 - Dynamic types — current `MemoryType` enum and gate `_NOISE_TYPES`/`_SIGNIFICANT_TYPES` frozensets are trading-biased hardcoded. Target: emerge from usage.
 - Bi-temporal facts with validity windows (stolen from Graphiti)
 - L0/L1/L2/L3 context layering (~170 token wake-up)
@@ -102,13 +102,35 @@ Money keeps its current embedded Brain running until the new one is mature and d
 - [x] Copy 9 core modules (`store`, `gate`, `graph`, `memory`, `enrichment`, `events`, `pending_queue`, `decisions`, `server`) + 9 test files
 - [x] Rename imports `money.brain` → `brain`, purge `money.core.*`, replace yaml-config with env vars
 - [x] Install via uv, ruff clean, **143/143 pytest green**
-- [ ] `docker compose up` — backend reachable on :8611, `/health` OK
+- [x] `docker compose up` — backend reachable on `:8621`, `/health` OK (healthy 2026-04-17)
 - [ ] Dogfood: point Money's `BRAIN_URL` env var to the new container, run for a week
 
 ### Phase 2 — MCP server
 - [ ] Port existing MCP tools (`brain_store`, `brain_search`, `brain_related`, `brain_stats`, `brain_forget`)
 - [ ] Add the 29-tool surface MemPalace ships (wings/rooms/halls metaphor — or our equivalent)
 - [ ] Claude plugin marketplace submission: `claude plugin install brain`
+
+### Phase 2b — Hook architecture (the real product)
+
+**Why this exists** (brainstormed 2026-04-19): MCP tools let the model *ask* Brain for memories. Hooks let Brain *automatically* inject context at session start and *automatically* capture memories at turn end — no tool call required. This is what separates "memory API" from "cerveau parfait".
+
+**MVP scope** (2 hooks of 6, L0/L1 hardcoded, CC reference implementation):
+- [ ] Spec: agnostic hook contract — `POST /hook/wake_up`, `POST /hook/post_turn` (JSON in/out). See `docs/specs/YYYY-MM-DD-hook-architecture-design.md` once written.
+- [ ] Backend: `/hook/wake_up` returns L0 (tag=identity) + L1 (tag=preference) memories formatted for system-prompt injection, 500-token budget
+- [ ] Backend: `/hook/post_turn` extracts facts via LLM (default Gemini Flash, configurable), feeds through existing gate + dedup, stores typed memories
+- [ ] `Extractor` Protocol + Gemini Flash implementation, output schema `{memories: [{content, type, tags, confidence}]}`
+- [ ] Claude Code adapter: `SessionStart` hook → `wake_up`; `Stop` hook → `post_turn`. Replaces the current `brain_hook.py`.
+- [ ] Dogfood on Brain sessions for ≥7 days, verify cerveau-parfait effect in practice
+
+**Deferred post-MVP** (each becomes its own spec):
+- [ ] Remaining hooks: `pre_turn` (L2 topic-triggered), `pre_tool_use`, `post_tool_use`, explicit `session_end` consolidation
+- [ ] Bootstrap flow: how a new user seeds initial identity/preference memories (interactive CLI? web UI? auto-derive from CLAUDE.md?)
+- [ ] Adaptive token budget — L0/L1 allocated independently based on session type
+- [ ] Multi-platform adapters — Cursor, OpenAI Codex, Cline, etc. (one adapter module per platform, contract stays stable)
+- [ ] L2 topic-triggered retrieval (unblocked by `docs/improvements/` P2 "L0/L1/L2/L3 context layering")
+- [ ] L3 explicit deep semantic search API (Brain tool exposed via MCP)
+- [ ] Dynamic memory types in extractor output normalization (paired with `docs/improvements/` P0)
+- [ ] Extractor fallback chains (Flash down → Haiku → Ollama → raw blob)
 
 ### Phase 3 — Installer
 - [ ] `npx brain` Node script — detects Docker, drops compose.yml, starts containers, registers MCP
@@ -122,10 +144,20 @@ Money keeps its current embedded Brain running until the new one is mature and d
 - [ ] Per-agent diary view
 
 ### Phase 5 — Benchmarks
-- [ ] Clone `xiaowu0162/LongMemEval`, write adapter
-- [ ] Run LongMemEval-s (115K tokens setting), publish score
+**Strategy** (brainstormed 2026-04-17):
+- LLM runner: Ollama (local, free) for dev loop; Claude/GPT-4o for published runs
+- Ablations: minimal — **Brain full vs ChromaDB raw baseline** (avoids MemPalace trap: their 96.6% is the embedding, not the structure). Full ablations (no gate / no graph / no decay) deferred to v2.
+- Two-phase: LongMemEval-s first (comparable, publishable), then Brain-Bench custom (concrete agent usage on Money/Marcel transcripts).
+
+**Tasks**:
+- [ ] Clone `xiaowu0162/LongMemEval`, write adapter wiring Brain HTTP API
+- [ ] Ollama-backed dev loop (Llama 3.1 70B or Qwen 2.5): iterate adapter on 50-Q subset at $0 cost
+- [ ] Run LongMemEval-s full 500 Q with Claude Opus reader + judge — publish score
+- [ ] Re-run MemPalace + mem0 with the same Claude config for apples-to-apples comparison
+- [ ] Ablation: Brain full vs ChromaDB raw — report the delta honestly
 - [ ] Target: beat mem0's 49%, aim at Zep's 63.8%
-- [ ] Add LoCoMo (snap-research/locomo)
+- [ ] Phase 5b: Brain-Bench custom — ingest Money/Marcel transcripts, design QA covering dev-agent use cases
+- [ ] Phase 5c: Add LoCoMo (snap-research/locomo)
 - [ ] Benchmark viewer page on frontend, version-over-version diff
 
 ### Phase 6 — Aggregator mode
@@ -142,7 +174,7 @@ Money keeps its current embedded Brain running until the new one is mature and d
 ## Repo dependencies for a fresh agent
 
 **Money** (`C:\Money`) — parent repo. Has:
-- Working Brain service (Python, port 8611) — the code to extract
+- Legacy embedded Brain service (Python, port 8611) — the source we extracted from
 - `.claude/settings.json` — reference for this repo's config
 - `scripts/brain_hook.py` / `scripts/brain_statusline.py` — already copied here
 

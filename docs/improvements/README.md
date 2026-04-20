@@ -2,11 +2,16 @@
 status: open
 owner: core
 created: 2026-04-16
+updated: 2026-04-19
 ---
 
 # Improvements backlog
 
 Dettes connues, tranchées au moment de l'extraction de Money. Ordre = priorité descendante.
+
+## When to extract to its own file
+
+If an item grows past ~10 lines, needs its own ADR reference, or gets actively worked on → extract to `docs/improvements/<slug>.md` and leave a one-line pointer here. Keep this file scannable in one screen.
 
 ## P0 — Types dynamiques (vrai cerveau)
 
@@ -38,7 +43,9 @@ Dettes connues, tranchées au moment de l'extraction de Money. Ordre = priorité
 
 **Cible** : pattern MemPalace — L0 identity always-on (~50 tokens), L1 preferences always-on (~120 tokens), L2 topic-triggered, L3 deep semantic search explicite. Wake-up cost visible.
 
-**Quand** : phase frontend/drop-in. Requiert API de récupération layer-aware.
+**Status** : partiellement adressé par Phase 2b MVP (L0 + L1 hardcodés via tag=identity / tag=preference dans le hook `wake_up`). L2 topic-triggered et L3 deep-search restent à faire — voir README Phase 2b "Deferred post-MVP".
+
+**Quand** : après dogfood Phase 2b MVP, quand on voit en pratique que L0/L1 seuls laissent des trous.
 
 ## P2 — Réactiver mypy strict
 

@@ -1,0 +1,18 @@
+# Validation run — weekly/pre-merge regression check.
+# Reader = Haiku (constrained reasoning; forces Brain to contribute)
+# Judge  = Sonnet (precise enough, cheap)
+# Cost estimate: ~$10 per full 500Q run across all 3 adapters (none/raw/brain).
+dataset: longmemeval_s
+subset: null
+adapter: brain
+reader:
+  provider: anthropic
+  model: claude-haiku-4-5-20251001
+judge:
+  provider: anthropic
+  model: claude-sonnet-4-6
+brain_url: http://localhost:8621
+chromadb_raw_persist_dir: ./runs/chromadb_raw
+output_dir: ../docs/benchmarks
+dry_run: false
+seed: 42

@@ -730,3 +730,125 @@ def _set_level(store: BrainStore, entry_id: str, level: int) -> None:
         ids=[entry_id],
         metadatas=[{**meta, "level": level}],
     )
+
+
+class TestCustomMetadataAndTopK:
+    """Regression coverage for issues #1 (custom metadata) and #2 (top_k)."""
+
+    def test_custom_metadata_round_trips_through_search(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store(
+            content="User said their favorite color is blue",
+            agent="longmemeval",
+            memory_type="context",
+            metadata={
+                "session_id": "sess-123",
+                "session_date": "2025-03-01",
+                "turn_idx": 4,
+                "role": "user",
+            },
+            skip_gate=True,
+        )
+
+        results = store.search("favorite color")
+        assert len(results) >= 1
+        assert "metadata" in results[0], "search() must expose custom metadata dict"
+        custom = results[0]["metadata"]
+        assert custom["session_id"] == "sess-123"
+        assert custom["session_date"] == "2025-03-01"
+        assert custom["turn_idx"] == 4
+        assert custom["role"] == "user"
+
+    def test_custom_metadata_does_not_collide_with_reserved_fields(self, tmp_path: Path):
+        """Native Brain fields (agent, memory_type, …) stay at top level, NOT in metadata."""
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store(
+            content="Some content",
+            agent="test-agent",
+            memory_type="context",
+            metadata={"session_id": "s1"},
+            skip_gate=True,
+        )
+        results = store.search("content")
+        assert results[0]["agent"] == "test-agent"
+        assert results[0]["memory_type"] == "context"
+        assert "agent" not in results[0]["metadata"]
+        assert "memory_type" not in results[0]["metadata"]
+        assert results[0]["metadata"] == {"session_id": "s1"}
+
+    def test_metadata_empty_dict_when_no_custom_keys(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store(
+            content="Content with no custom metadata",
+            agent="t", memory_type="context", skip_gate=True,
+        )
+        results = store.search("Content")
+        assert results[0]["metadata"] == {}
+
+    def test_top_k_three_returns_three(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        for i in range(10):
+            store.store(
+                content=f"Memory number {i} about Lake Michigan sailing",
+                agent="t", memory_type="context", skip_gate=True,
+            )
+        results = store.search("sailing", top_k=3, reinforce=False)
+        assert len(results) == 3, f"top_k=3 must return 3 results, got {len(results)}"
+
+    def test_top_k_seven_returns_seven(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        for i in range(10):
+            store.store(
+                content=f"Memory number {i} about kayaking",
+                agent="t", memory_type="context", skip_gate=True,
+            )
+        results = store.search("kayaking", top_k=7, reinforce=False)
+        assert len(results) == 7, f"top_k=7 must return 7 results, got {len(results)}"
+
+    def test_top_k_greater_than_total_returns_all(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        for i in range(3):
+            store.store(
+                content=f"Memory {i} about hiking",
+                agent="t", memory_type="context", skip_gate=True,
+            )
+        results = store.search("hiking", top_k=100, reinforce=False)
+        assert len(results) == 3
+
+
+class TestReset:
+    """Regression coverage for issue #5 — reset() must actually wipe memories."""
+
+    def test_reset_without_filter_wipes_everything(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        for i in range(4):
+            store.store(f"memory {i}", agent=f"agent-{i}", memory_type="context", skip_gate=True)
+        assert store.stats()["total"] == 4
+        deleted = store.reset()
+        assert deleted == 4
+        assert store.stats()["total"] == 0
+
+    def test_reset_scoped_to_agent(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("alpha-1", agent="alpha", memory_type="context", skip_gate=True)
+        store.store("alpha-2", agent="alpha", memory_type="context", skip_gate=True)
+        store.store("beta-1", agent="beta", memory_type="context", skip_gate=True)
+        assert store.stats()["total"] == 3
+
+        deleted = store.reset(agent="alpha")
+        assert deleted == 2
+        stats = store.stats()
+        assert stats["total"] == 1
+        assert stats["agents"] == {"beta": 1}
+
+    def test_reset_on_empty_collection_is_noop(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        assert store.reset() == 0
+        assert store.reset(agent="whatever") == 0
+
+    def test_reset_unknown_agent_is_noop(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("content", agent="alpha", memory_type="context", skip_gate=True)
+        deleted = store.reset(agent="beta")
+        assert deleted == 0
+        assert store.stats()["total"] == 1

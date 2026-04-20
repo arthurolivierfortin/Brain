@@ -39,6 +39,12 @@ RESERVED_META_KEYS: frozenset[str] = frozenset({
     "source", "dedup_key", "superseded", "consolidated_into", "superseded_by",
     "occurrence_count", "event_type",
 })
+
+# Reserved keys that the caller IS allowed to override via metadata=.
+# Split from RESERVED_META_KEYS because confidence must still be excluded from
+# the nested `metadata` dict at read time (it's surfaced as a top-level field),
+# but PostTurnHandler's raw-fallback relies on confidence=0.3 persisting.
+_CALLER_OVERRIDABLE_META_KEYS: frozenset[str] = frozenset({"confidence"})
 COLLECTION_NAME = "brain"
 
 # Composite scoring: decay constant in days per hierarchy level
@@ -162,7 +168,7 @@ class BrainStore:
         # Preserve caller-supplied metadata (e.g. session_id from benchmarks).
         # Only scalars — ChromaDB rejects nested structures.
         for key, value in metadata.items():
-            if key in RESERVED_META_KEYS:
+            if key in RESERVED_META_KEYS and key not in _CALLER_OVERRIDABLE_META_KEYS:
                 continue
             if isinstance(value, (str, int, float, bool)):
                 chroma_meta[key] = value
@@ -725,6 +731,40 @@ class BrainStore:
                         pass
 
         return related
+
+    def search_by_tag(self, tag: str, agent: str, top_k: int = 5) -> list[dict]:
+        """Return memories whose tags contain `tag`, scoped to agent, ordered by access_count desc.
+
+        Used by the hook `wake_up` handler to fetch L0 (identity) and L1 (preference)
+        memories. Substring matching on tags enables namespacing (identity-core matches
+        identity). See docs/specs/2026-04-19-hook-architecture-design.md.
+        """
+        if self._collection.count() == 0:
+            return []
+        results = self._collection.get(
+            where={"agent": {"$eq": agent}},
+            include=["documents", "metadatas"],
+        )
+        ids = results.get("ids") or []
+        docs = results.get("documents") or []
+        metas = results.get("metadatas") or []
+        entries: list[dict] = []
+        for i, entry_id in enumerate(ids):
+            meta = metas[i] or {}
+            meta_tags = str(meta.get("tags", ""))
+            if tag not in meta_tags:
+                continue
+            entries.append({
+                "id": entry_id,
+                "content": docs[i] if i < len(docs) else "",
+                "tags": meta_tags,
+                "access_count": meta.get("access_count", 0),
+                "memory_type": meta.get("memory_type", ""),
+                "agent": meta.get("agent", ""),
+                "confidence": meta.get("confidence", 1.0),
+            })
+        entries.sort(key=lambda e: e["access_count"], reverse=True)
+        return entries[:top_k]
 
     def forget(self, entry_id: str) -> bool:
         """Remove a memory entry."""

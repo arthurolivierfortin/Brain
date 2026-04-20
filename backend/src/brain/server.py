@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -27,6 +28,16 @@ mcp = FastMCP("money-brain")
 _store: BrainStore | None = None
 _events: EventLog | None = None
 _queue: PendingQueue | None = None
+_extractor: Any = None
+
+
+def _get_extractor() -> Any:
+    """Lazy singleton for the Extractor. Reads GOOGLE_API_KEY from env."""
+    global _extractor
+    if _extractor is None:
+        from brain.hook import GeminiFlashExtractor
+        _extractor = GeminiFlashExtractor()
+    return _extractor
 
 
 def get_store() -> BrainStore:
@@ -294,6 +305,68 @@ def create_http_app():
                 except Exception as e:
                     logger.error("Consolidation failed: %s", e)
                     self._json_response({"error": str(e)}, status=500)
+            elif self.path == "/hook/wake_up":
+                from brain.hook import HookRequest, WakeUpHandler
+                agent = data.get("agent", "")
+                if not agent:
+                    self._json_response({"error": "missing 'agent'"}, status=400)
+                    return
+                store = get_store()
+                events = get_events()
+                req = HookRequest(
+                    agent=agent,
+                    project=data.get("project", ""),
+                    session_id=data.get("session_id", ""),
+                )
+                handler = WakeUpHandler(store)
+                r = handler.handle(req)
+                events.log(
+                    event_type="hook_wake_up",
+                    agent=req.agent,
+                    metadata={
+                        "tokens_approx": r.tokens_approx,
+                        "layers_loaded": r.layers_loaded,
+                        "duration_ms": r.duration_ms,
+                    },
+                )
+                self._json_response({
+                    "context": r.context,
+                    "layers_loaded": r.layers_loaded,
+                    "tokens_approx": r.tokens_approx,
+                    "duration_ms": r.duration_ms,
+                })
+            elif self.path == "/hook/post_turn":
+                from brain.hook import HookRequest, PostTurnHandler, Turn
+                agent = data.get("agent", "")
+                if not agent:
+                    self._json_response({"error": "missing 'agent'"}, status=400)
+                    return
+                try:
+                    extractor = _get_extractor()
+                except ValueError as e:
+                    self._json_response({"error": str(e)}, status=503)
+                    return
+                store = get_store()
+                events = get_events()
+                req = HookRequest(
+                    agent=agent,
+                    project=data.get("project", ""),
+                    session_id=data.get("session_id", ""),
+                )
+                turn_data = data.get("turn", {})
+                turn = Turn(
+                    user=turn_data.get("user", ""),
+                    assistant=turn_data.get("assistant", ""),
+                    tool_calls=turn_data.get("tool_calls", []),
+                )
+                handler = PostTurnHandler(store, extractor, events)
+                r = handler.handle(req, turn)
+                self._json_response({
+                    "extracted": r.extracted,
+                    "rejected_by_gate": r.rejected_by_gate,
+                    "extraction_cost_usd": r.extraction_cost_usd,
+                    "extraction_ms": r.extraction_ms,
+                })
             elif self.path == "/reset":
                 store = get_store()
                 agent = data.get("agent")

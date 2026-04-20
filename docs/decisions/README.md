@@ -47,3 +47,4 @@ superseded_by:         # optional, filled in later
 ## Index
 
 - [`0001-project-meta-conventions.md`](0001-project-meta-conventions.md) — doc structure, issue-first workflow, agent cadence (2026-04-19)
+- [`0002-hook-architecture.md`](0002-hook-architecture.md) — hook contract + MVP shape for wake_up/post_turn, L0/L1 via tags (2026-04-19)

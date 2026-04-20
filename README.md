@@ -33,9 +33,11 @@ brain/
 ├── installer/        # Node script — npx brain
 ├── benchmarks/       # LongMemEval, LoCoMo harness + results
 ├── scripts/          # Client-side hooks (copy into consumer repos)
-│   ├── brain_hook.py         # Claude Code Stop hook — POST session delta
+│   ├── brain_wake_up.py      # Claude Code SessionStart hook — inject L0/L1 context
+│   ├── brain_post_turn.py    # Claude Code Stop hook — POST structured turn delta
 │   ├── brain_statusline.py   # Claude Code statusLine — branch + ctx + brain state
-│   └── brain_save_now.py     # Manual mid-session save trigger
+│   ├── brain_save_now.py     # Manual mid-session save trigger
+│   └── seed_brain.py         # One-off bootstrap of identity/preference memories
 └── docs/
     └── research/             # Competitive analysis
 ```
@@ -115,11 +117,11 @@ Money keeps its current embedded Brain running until the new one is mature and d
 **Why this exists** (brainstormed 2026-04-19): MCP tools let the model *ask* Brain for memories. Hooks let Brain *automatically* inject context at session start and *automatically* capture memories at turn end — no tool call required. This is what separates "memory API" from "cerveau parfait".
 
 **MVP scope** (2 hooks of 6, L0/L1 hardcoded, CC reference implementation):
-- [ ] Spec: agnostic hook contract — `POST /hook/wake_up`, `POST /hook/post_turn` (JSON in/out). See `docs/specs/YYYY-MM-DD-hook-architecture-design.md` once written.
-- [ ] Backend: `/hook/wake_up` returns L0 (tag=identity) + L1 (tag=preference) memories formatted for system-prompt injection, 500-token budget
-- [ ] Backend: `/hook/post_turn` extracts facts via LLM (default Gemini Flash, configurable), feeds through existing gate + dedup, stores typed memories
-- [ ] `Extractor` Protocol + Gemini Flash implementation, output schema `{memories: [{content, type, tags, confidence}]}`
-- [ ] Claude Code adapter: `SessionStart` hook → `wake_up`; `Stop` hook → `post_turn`. Replaces the current `brain_hook.py`.
+- [x] Spec: agnostic hook contract — `POST /hook/wake_up`, `POST /hook/post_turn` (JSON in/out). See `docs/specs/2026-04-19-hook-architecture-design.md`.
+- [x] Backend: `/hook/wake_up` returns L0 (tag=identity) + L1 (tag=preference) memories formatted for system-prompt injection, 500-token budget
+- [x] Backend: `/hook/post_turn` extracts facts via LLM (default Gemini Flash, configurable), feeds through existing gate + dedup, stores typed memories
+- [x] `Extractor` Protocol + Gemini Flash implementation, output schema `{memories: [{content, type, tags, confidence}]}`
+- [x] Claude Code adapter: `SessionStart` hook → `wake_up`; `Stop` hook → `post_turn`. Replaces the current `brain_hook.py`.
 - [ ] Dogfood on Brain sessions for ≥7 days, verify cerveau-parfait effect in practice
 
 **Deferred post-MVP** (each becomes its own spec):
@@ -176,7 +178,7 @@ Money keeps its current embedded Brain running until the new one is mature and d
 **Money** (`C:\Money`) — parent repo. Has:
 - Legacy embedded Brain service (Python, port 8611) — the source we extracted from
 - `.claude/settings.json` — reference for this repo's config
-- `scripts/brain_hook.py` / `scripts/brain_statusline.py` — already copied here
+- `scripts/brain_statusline.py` was copied here; the Stop-hook script has since been rewritten (`scripts/brain_post_turn.py`) to talk to the new `/hook/post_turn` contract
 
 **Marcel** (`C:\Marcel`) — planned consumer. Next.js app. Will use `npx brain` once the installer lands.
 

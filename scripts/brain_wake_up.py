@@ -31,36 +31,39 @@ def derive_agent(cwd: str) -> str:
 
 
 def main(stdin_data: str | None = None) -> int:
-    raw = stdin_data if stdin_data is not None else sys.stdin.read()
     try:
-        data = json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        _write_empty()
+        raw = stdin_data if stdin_data is not None else sys.stdin.read()
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            _write_empty()
+            return 0
+
+        cwd = data.get("cwd", "") or os.getcwd()
+        session_id = data.get("session_id", "")
+        agent = derive_agent(cwd)
+
+        try:
+            resp = httpx.post(
+                f"{BRAIN_URL}/hook/wake_up",
+                json={"agent": agent, "project": cwd, "session_id": session_id},
+                timeout=TIMEOUT_SECONDS,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+        except Exception:
+            _write_empty()
+            return 0
+
+        sys.stdout.write(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "SessionStart",
+                "additionalContext": body.get("context", ""),
+            },
+        }))
         return 0
-
-    cwd = data.get("cwd", "") or os.getcwd()
-    session_id = data.get("session_id", "")
-    agent = derive_agent(cwd)
-
-    try:
-        resp = httpx.post(
-            f"{BRAIN_URL}/hook/wake_up",
-            json={"agent": agent, "project": cwd, "session_id": session_id},
-            timeout=TIMEOUT_SECONDS,
-        )
-        resp.raise_for_status()
-        body = resp.json()
     except Exception:
-        _write_empty()
         return 0
-
-    sys.stdout.write(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "SessionStart",
-            "additionalContext": body.get("context", ""),
-        },
-    }))
-    return 0
 
 
 def _write_empty() -> None:

@@ -8,11 +8,11 @@ from unittest.mock import patch
 import brain_wake_up as hook
 
 
-def _capture_stdout(fn):
+def _capture(fn):
     buf = io.StringIO()
     with patch("sys.stdout", buf):
-        fn()
-    return buf.getvalue()
+        rc = fn()
+    return buf.getvalue(), rc
 
 
 def test_derive_agent_uses_cwd_basename():
@@ -34,10 +34,11 @@ def test_successful_wake_up_returns_cc_contract(monkeypatch):
             "duration_ms": 5,
         })
     monkeypatch.setattr(hook.httpx, "post", fake_post)
-    out = _capture_stdout(lambda: hook.main(
+    out, rc = _capture(lambda: hook.main(
         stdin_data=json.dumps({"cwd": "C:/Brain", "session_id": "s1"})
     ))
     parsed = json.loads(out)
+    assert rc == 0
     assert parsed["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "Arthur" in parsed["hookSpecificOutput"]["additionalContext"]
 
@@ -46,26 +47,29 @@ def test_brain_unreachable_yields_empty_context(monkeypatch):
     def _raise(*a, **kw):
         raise RuntimeError("network down")
     monkeypatch.setattr(hook.httpx, "post", _raise)
-    out = _capture_stdout(lambda: hook.main(
+    out, rc = _capture(lambda: hook.main(
         stdin_data=json.dumps({"cwd": "C:/Brain", "session_id": "s1"})
     ))
     parsed = json.loads(out)
+    assert rc == 0
     assert parsed["hookSpecificOutput"]["additionalContext"] == ""
 
 
 def test_malformed_stdin_yields_empty_context(monkeypatch):
-    out = _capture_stdout(lambda: hook.main(stdin_data="{not json"))
+    out, rc = _capture(lambda: hook.main(stdin_data="{not json"))
     parsed = json.loads(out)
+    assert rc == 0
     assert parsed["hookSpecificOutput"]["additionalContext"] == ""
 
 
 def test_http_500_yields_empty_context(monkeypatch):
     monkeypatch.setattr(hook.httpx, "post",
                         lambda *a, **kw: _FakeResp(500, {"error": "boom"}))
-    out = _capture_stdout(lambda: hook.main(
+    out, rc = _capture(lambda: hook.main(
         stdin_data=json.dumps({"cwd": "/x", "session_id": "s"})
     ))
     parsed = json.loads(out)
+    assert rc == 0
     assert parsed["hookSpecificOutput"]["additionalContext"] == ""
 
 

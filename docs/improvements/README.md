@@ -43,7 +43,9 @@ If an item grows past ~10 lines, needs its own ADR reference, or gets actively w
 
 **Cible** : pattern MemPalace — L0 identity always-on (~50 tokens), L1 preferences always-on (~120 tokens), L2 topic-triggered, L3 deep semantic search explicite. Wake-up cost visible.
 
-**Quand** : phase frontend/drop-in. Requiert API de récupération layer-aware.
+**Status** : partiellement adressé par Phase 2b MVP (L0 + L1 hardcodés via tag=identity / tag=preference dans le hook `wake_up`). L2 topic-triggered et L3 deep-search restent à faire — voir README Phase 2b "Deferred post-MVP".
+
+**Quand** : après dogfood Phase 2b MVP, quand on voit en pratique que L0/L1 seuls laissent des trous.
 
 ## P2 — Réactiver mypy strict
 

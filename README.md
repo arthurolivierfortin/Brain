@@ -110,6 +110,28 @@ Money keeps its current embedded Brain running until the new one is mature and d
 - [ ] Add the 29-tool surface MemPalace ships (wings/rooms/halls metaphor — or our equivalent)
 - [ ] Claude plugin marketplace submission: `claude plugin install brain`
 
+### Phase 2b — Hook architecture (the real product)
+
+**Why this exists** (brainstormed 2026-04-19): MCP tools let the model *ask* Brain for memories. Hooks let Brain *automatically* inject context at session start and *automatically* capture memories at turn end — no tool call required. This is what separates "memory API" from "cerveau parfait".
+
+**MVP scope** (2 hooks of 6, L0/L1 hardcoded, CC reference implementation):
+- [ ] Spec: agnostic hook contract — `POST /hook/wake_up`, `POST /hook/post_turn` (JSON in/out). See `docs/specs/YYYY-MM-DD-hook-architecture-design.md` once written.
+- [ ] Backend: `/hook/wake_up` returns L0 (tag=identity) + L1 (tag=preference) memories formatted for system-prompt injection, 500-token budget
+- [ ] Backend: `/hook/post_turn` extracts facts via LLM (default Gemini Flash, configurable), feeds through existing gate + dedup, stores typed memories
+- [ ] `Extractor` Protocol + Gemini Flash implementation, output schema `{memories: [{content, type, tags, confidence}]}`
+- [ ] Claude Code adapter: `SessionStart` hook → `wake_up`; `Stop` hook → `post_turn`. Replaces the current `brain_hook.py`.
+- [ ] Dogfood on Brain sessions for ≥7 days, verify cerveau-parfait effect in practice
+
+**Deferred post-MVP** (each becomes its own spec):
+- [ ] Remaining hooks: `pre_turn` (L2 topic-triggered), `pre_tool_use`, `post_tool_use`, explicit `session_end` consolidation
+- [ ] Bootstrap flow: how a new user seeds initial identity/preference memories (interactive CLI? web UI? auto-derive from CLAUDE.md?)
+- [ ] Adaptive token budget — L0/L1 allocated independently based on session type
+- [ ] Multi-platform adapters — Cursor, OpenAI Codex, Cline, etc. (one adapter module per platform, contract stays stable)
+- [ ] L2 topic-triggered retrieval (unblocked by `docs/improvements/` P2 "L0/L1/L2/L3 context layering")
+- [ ] L3 explicit deep semantic search API (Brain tool exposed via MCP)
+- [ ] Dynamic memory types in extractor output normalization (paired with `docs/improvements/` P0)
+- [ ] Extractor fallback chains (Flash down → Haiku → Ollama → raw blob)
+
 ### Phase 3 — Installer
 - [ ] `npx brain` Node script — detects Docker, drops compose.yml, starts containers, registers MCP
 - [ ] Sub-commands: `brain stop`, `brain logs`, `brain benchmark`

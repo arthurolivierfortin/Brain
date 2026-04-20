@@ -56,7 +56,7 @@ def test_main_posts_structured_turn(monkeypatch, tmp_path: Path):
                                "cwd": "C:/Brain"}),
         state_dir=state_dir, pending_path=pending,
     )
-    assert rc is True
+    assert rc == 0
     assert "/hook/post_turn" in captured["url"]
     assert captured["body"]["agent"] == "brain"
     assert captured["body"]["turn"]["user"].startswith("do X")
@@ -108,6 +108,33 @@ def test_main_skips_under_min_delta(monkeypatch, tmp_path: Path):
         state_dir=tmp_path / "state", pending_path=tmp_path / "p.jsonl",
     )
     assert called == []
+
+
+def test_drain_discards_legacy_format_entries(monkeypatch, tmp_path: Path):
+    pending = tmp_path / "pending.jsonl"
+    legacy = {"content": "old", "agent": "brain", "attempts": 0,
+              "queued_at": "2026-01-01T00:00:00+00:00"}
+    modern = {"payload": {"agent": "brain", "project": "/p", "session_id": "s",
+                          "turn": {"user": "u", "assistant": "a", "tool_calls": []}},
+              "attempts": 0, "queued_at": "2026-01-01T00:00:00+00:00"}
+    pending.write_text(
+        json.dumps(legacy) + "\n" + json.dumps(modern) + "\n",
+        encoding="utf-8",
+    )
+
+    calls = []
+    def fake_post(url, json, timeout):
+        calls.append(json)
+        return _FakeResp(200, {})
+    monkeypatch.setattr(hook.httpx, "post", fake_post)
+
+    hook.drain_pending(pending)
+
+    assert len(calls) == 1
+    assert calls[0]["agent"] == "brain"
+    assert calls[0]["session_id"] == "s"
+    remaining = pending.read_text(encoding="utf-8").strip()
+    assert remaining == ""
 
 
 class _FakeResp:

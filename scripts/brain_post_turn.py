@@ -144,13 +144,16 @@ def drain_pending(pending_path: Path) -> None:
         return
     remaining: list[dict] = []
     for entry in entries:
+        payload = entry.get("payload")
+        if payload is None:
+            continue
         attempts = entry.get("attempts", 0)
         if attempts >= MAX_PENDING_ATTEMPTS:
             continue
         try:
             resp = httpx.post(
                 f"{BRAIN_URL}/hook/post_turn",
-                json=entry.get("payload", entry),
+                json=payload,
                 timeout=BRAIN_TIMEOUT,
             )
             resp.raise_for_status()
@@ -163,7 +166,7 @@ def main(
     stdin_data: str | None = None,
     state_dir: Path | None = None,
     pending_path: Path | None = None,
-) -> bool:
+) -> int:
     try:
         resolved_state = state_dir or HOOK_STATE_DIR
         resolved_pending = pending_path or PENDING_PATH
@@ -172,20 +175,20 @@ def main(
         try:
             data = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
-            return False
+            return 0
 
         session_id = data.get("session_id", "")
         transcript_str = data.get("transcript_path", "")
         cwd = data.get("cwd", "") or os.getcwd()
         if not transcript_str:
-            return False
+            return 0
         transcript_path = Path(transcript_str)
 
         offset = load_offset(resolved_state, session_id)
         delta_size = read_delta_size(transcript_path, offset)
         if delta_size < MIN_DELTA_CHARS:
             save_offset(resolved_state, session_id, get_new_offset(transcript_path))
-            return False
+            return 0
 
         turn = parse_delta_to_turn(transcript_path, offset)
         agent = derive_agent(cwd)
@@ -200,11 +203,10 @@ def main(
             append_pending(resolved_pending, {"payload": payload})
 
         save_offset(resolved_state, session_id, get_new_offset(transcript_path))
-        return True
+        return 0
     except Exception:
-        return False
+        return 0
 
 
 if __name__ == "__main__":
-    main()
-    sys.exit(0)
+    sys.exit(main())

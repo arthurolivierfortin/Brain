@@ -19,13 +19,25 @@
     "refreshInterval": 30
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/brain_wake_up.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/brain_hook.py\"",
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/brain_post_turn.py\"",
             "timeout": 30
           }
         ]

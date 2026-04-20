@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -182,3 +183,101 @@ class WakeUpHandler:
     @staticmethod
     def _tokens(text: str) -> int:
         return len(text) // 4
+
+
+class PostTurnHandler:
+    """Extracts, gates, stores. Fallback to raw-blob if extractor returns [] or raises."""
+
+    def __init__(self, store: Any, extractor: Extractor, events: Any) -> None:
+        self._store = store
+        self._extractor = extractor
+        self._events = events
+
+    def handle(self, req: HookRequest, turn: Turn) -> PostTurnResponse:
+        t0 = time.monotonic()
+        try:
+            memories = self._extractor.extract(turn)
+        except Exception:
+            memories = []
+        extraction_ms = int((time.monotonic() - t0) * 1000)
+
+        extracted: list[dict] = []
+        rejected = 0
+
+        if not memories:
+            raw = self._fallback_content(turn)
+            if raw:
+                result = self._store.store(
+                    content=raw,
+                    agent=req.agent,
+                    memory_type="raw-fallback",
+                    metadata={
+                        "tags": "",
+                        "confidence": 0.3,
+                        "session_id": req.session_id,
+                        "project": req.project,
+                    },
+                    skip_gate=False,
+                )
+                if result:
+                    extracted.append({
+                        "id": result.get("id", ""),
+                        "type": "raw-fallback",
+                        "content": raw[:200],
+                        "tags": [],
+                    })
+                else:
+                    rejected += 1
+        else:
+            for em in memories:
+                sanitized = [self._sanitize_tag(t) for t in em.tags]
+                result = self._store.store(
+                    content=em.content,
+                    agent=req.agent,
+                    memory_type=em.type,
+                    metadata={
+                        "tags": ",".join(t for t in sanitized if t),
+                        "confidence": em.confidence,
+                        "session_id": req.session_id,
+                        "project": req.project,
+                    },
+                    skip_gate=False,
+                )
+                if result:
+                    extracted.append({
+                        "id": result.get("id", ""),
+                        "type": em.type,
+                        "content": em.content,
+                        "tags": sanitized,
+                    })
+                else:
+                    rejected += 1
+
+        self._events.log(
+            event_type="hook_post_turn",
+            agent=req.agent,
+            metadata={
+                "extracted_count": len(extracted),
+                "rejected_count": rejected,
+                "extraction_ms": extraction_ms,
+            },
+        )
+        return PostTurnResponse(
+            extracted=extracted,
+            rejected_by_gate=rejected,
+            extraction_cost_usd=0.0,
+            extraction_ms=extraction_ms,
+        )
+
+    @staticmethod
+    def _fallback_content(turn: Turn) -> str:
+        parts = []
+        if turn.user:
+            parts.append(f"USER: {turn.user}")
+        if turn.assistant:
+            parts.append(f"ASSISTANT: {turn.assistant}")
+        return "\n".join(parts)[:2000]
+
+    @staticmethod
+    def _sanitize_tag(tag: str) -> str:
+        return re.sub(r"[^a-z0-9-]+", "-", tag.lower()).strip("-")

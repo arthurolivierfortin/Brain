@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -130,3 +131,54 @@ class GeminiFlashExtractor:
             tool_input = json.dumps(tc.get("input", ""))[:200]
             parts.append(f"TOOL: {name} input={tool_input}")
         return "\n\n".join(parts)
+
+
+class WakeUpHandler:
+    """Selects L0 + L1 memories and formats them as a system-prompt injection."""
+
+    L0_TAG = "identity"
+    L1_TAG = "preference"
+    BUDGET_TOKENS = 500
+
+    def __init__(self, store: Any) -> None:
+        self._store = store
+
+    def handle(self, req: HookRequest) -> WakeUpResponse:
+        t0 = time.monotonic()
+        identity = self._store.search_by_tag(self.L0_TAG, agent=req.agent, top_k=5)
+        prefs = self._store.search_by_tag(self.L1_TAG, agent=req.agent, top_k=10)
+
+        context = self._format(identity, prefs)
+        while self._tokens(context) > self.BUDGET_TOKENS and (identity or prefs):
+            if prefs:
+                prefs.pop()
+            else:
+                identity.pop()
+            context = self._format(identity, prefs)
+
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        return WakeUpResponse(
+            context=context,
+            layers_loaded={"L0": len(identity), "L1": len(prefs)},
+            tokens_approx=self._tokens(context),
+            duration_ms=duration_ms,
+        )
+
+    @staticmethod
+    def _format(identity: list[dict], prefs: list[dict]) -> str:
+        lines: list[str] = []
+        if identity:
+            lines.append("## Identity")
+            for m in identity:
+                lines.append(f"- {m['content']}")
+        if prefs:
+            if identity:
+                lines.append("")
+            lines.append("## Preferences")
+            for m in prefs:
+                lines.append(f"- {m['content']}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _tokens(text: str) -> int:
+        return len(text) // 4

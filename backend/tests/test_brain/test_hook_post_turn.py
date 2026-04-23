@@ -138,6 +138,7 @@ def test_mixed_accepted_and_rejected_memories(tmp_path: Path):
         Turn(user="u", assistant="a"),
     )
     assert len(resp.extracted) == 1
+    assert resp.extracted[0]["content"].startswith("this memory")
     assert resp.rejected_by_gate == 1
     assert store._collection.count() == 1
 

@@ -100,6 +100,49 @@ def test_extraction_ms_is_reported(tmp_path: Path):
     assert resp.extraction_ms >= 0
 
 
+def test_rejected_by_gate_increments_counter(tmp_path: Path):
+    """Content < 10 chars triggers BrainGate Rule 1 (REJECT). Handler must count it."""
+    store, events = _new(tmp_path)
+    extractor = MagicMock()
+    extractor.extract.return_value = [
+        ExtractedMemory(content="short", type="fact", tags=["backend"], confidence=0.9),
+    ]
+    handler = PostTurnHandler(store, extractor, events)
+    resp = handler.handle(
+        HookRequest(agent="t", project="/p", session_id="s1"),
+        Turn(user="u", assistant="a"),
+    )
+    assert resp.rejected_by_gate == 1
+    assert resp.extracted == []
+    assert store._collection.count() == 0
+    # Event log reflects the rejection, not a false "extracted"
+    recent = events.recent(limit=10)
+    hook_events = [e for e in recent if e.get("event_type") == "hook_post_turn"]
+    assert len(hook_events) == 1
+    assert hook_events[0]["metadata"]["extracted_count"] == 0
+    assert hook_events[0]["metadata"]["rejected_count"] == 1
+
+
+def test_mixed_accepted_and_rejected_memories(tmp_path: Path):
+    """One memory passes gate, one fails. Both paths exercised in same call."""
+    store, events = _new(tmp_path)
+    extractor = MagicMock()
+    extractor.extract.return_value = [
+        ExtractedMemory(content="this memory is long enough for gate", type="fact",
+                        tags=["backend"], confidence=0.9),
+        ExtractedMemory(content="tiny", type="fact", tags=["backend"], confidence=0.9),
+    ]
+    handler = PostTurnHandler(store, extractor, events)
+    resp = handler.handle(
+        HookRequest(agent="t", project="/p", session_id="s1"),
+        Turn(user="u", assistant="a"),
+    )
+    assert len(resp.extracted) == 1
+    assert resp.extracted[0]["content"].startswith("this memory")
+    assert resp.rejected_by_gate == 1
+    assert store._collection.count() == 1
+
+
 def test_hook_post_turn_event_logged(tmp_path: Path):
     store, events = _new(tmp_path)
     extractor = MagicMock()

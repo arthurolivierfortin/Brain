@@ -659,6 +659,25 @@
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
           />
+          <button
+            onMouseDown={e => e.stopPropagation()}
+            onClick={onRefresh}
+            disabled={isLoading}
+            style={{
+              position: 'absolute', top: '8px', right: '8px',
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+              color: 'var(--fg)', borderRadius: '4px', padding: '3px 8px',
+              cursor: isLoading ? 'default' : 'pointer',
+              fontFamily: 'var(--font)', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center',
+            }}
+          >
+            {isLoading ? 'loading…' : '↻ refresh'}
+            {!isLoading && lastFetchedAt && (
+              <span style={{ opacity: 0.5 }}>
+                {formatRelative(new Date(lastFetchedAt).toISOString())}
+              </span>
+            )}
+          </button>
         </div>
       );
     }

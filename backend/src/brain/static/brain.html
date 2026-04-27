@@ -723,9 +723,67 @@
       );
     }
 
-    // ── ThoughtStream (stub — replaced by [SPEC-12]) ──────────────────────────────
-    function ThoughtStream() {
-      return <div className="thought-stream" />;
+    // ── ThoughtStream ─────────────────────────────────────────────────────────────
+    function ThoughtStream({ events, focus, setFocus }) {
+      function badgeColor(type) {
+        if (type === 'hook_wake_up') return 'var(--ok)';
+        if (type === 'hook_post_turn') return 'var(--accent)';
+        if (type.includes('reject')) return 'var(--swap)';
+        if (type.includes('error') || type.includes('failed')) return 'var(--err)';
+        return '#555';
+      }
+
+      const filtered = focus
+        ? events.filter(ev => ev.node_id === focus || ev.metadata?.entry_id === focus)
+        : events;
+
+      return (
+        <div className="thought-stream">
+          <div style={{
+            padding: '6px 10px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'rgba(255,255,255,0.02)', flexShrink: 0,
+            fontSize: '11px',
+          }}>
+            {focus ? (
+              <>
+                <span style={{ color: 'var(--accent)' }}>focused: {focus.slice(0, 8)}</span>
+                <button
+                  onClick={() => setFocus(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--fg)', cursor: 'pointer', padding: '0 4px', fontSize: '12px' }}
+                >×</button>
+              </>
+            ) : (
+              <span style={{ opacity: 0.5 }}>all events</span>
+            )}
+          </div>
+          <ul style={{ listStyle: 'none', overflowY: 'auto', flex: 1, padding: '4px 0' }}>
+            {filtered.map((ev, i) => {
+              const type = ev.event_type ?? '';
+              const details = (ev.details ?? '').slice(0, 40);
+              const meta = ev.metadata ?? {};
+              return (
+                <li key={`${ev.timestamp}-${i}`} style={{
+                  padding: '3px 10px',
+                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  fontSize: '11px',
+                  display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'baseline',
+                }}>
+                  <span style={{ padding: '0 3px', borderRadius: '2px', background: badgeColor(type), color: '#000', fontSize: '10px', flexShrink: 0 }}>
+                    {type}
+                  </span>
+                  <span style={{ opacity: 0.7, flexShrink: 0 }}>{ev.agent ?? ''}</span>
+                  {details && <span style={{ opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{details}</span>}
+                  {meta.duration_ms != null && <span style={{ opacity: 0.45, flexShrink: 0 }}>{meta.duration_ms}ms</span>}
+                  {meta.tokens_approx != null && <span style={{ opacity: 0.45, flexShrink: 0 }}>{meta.tokens_approx}t</span>}
+                  <span style={{ opacity: 0.4, flexShrink: 0, marginLeft: 'auto' }}>{formatRelative(ev.timestamp)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
     }
 
     // ── App ────────────────────────────────────────────────────────────────────────

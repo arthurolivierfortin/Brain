@@ -1,18 +1,27 @@
 # Brain — STATUS
 
 **Updated:** 2026-04-27
-**Current phase:** R:phase-2b (Hook architecture — MVP)
+**Current phase:** R:phase-2b (Hook architecture — MVP, dogfood-ready)
 
 > Source-of-truth roadmap lives in [README.md](../README.md#roadmap). This file is the machine-parseable handle that `/cycle`, `/cycle-start`, `/plan`, and `/status` read.
 
 ## Current phase
 
-`R:phase-2b` — Hook architecture (the real product)
+`R:phase-2b` — Hook architecture + Brain monitor
+
+Brain monitor (3 PRs, 3 phases) shipped 2026-04-27:
+- [x] Phase 1 — skeleton + vitals (#16, PR #20)
+- [x] Phase 2 — graph viz + thought stream (#17, PR #21)
+- [x] Phase 3 — left panel + tabs + polish (#18, PR #22)
 
 Remaining deliverables for phase 2b:
-- [ ] Dogfood hook architecture on Brain sessions for ≥7 days, verify cerveau-parfait effect
+- [ ] Dogfood hook architecture + monitor on Brain sessions for ≥7 days, verify cerveau-parfait effect (open `http://localhost:8621/monitor` while Brain runs)
 
 All other phase 2b deliverables checked off in README.md.
+
+## Known follow-ups (post-2b)
+
+- MatrixView cell-overlay positioning bug at `backend/src/brain/static/brain.html` ~L1153 (double-counts `LABEL_GUTTER`; cosmetic, ~80px offset). Open as ad-hoc P:low if confirmed during dogfood.
 
 ## Phase pipeline (next)
 

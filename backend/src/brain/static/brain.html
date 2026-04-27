@@ -26,10 +26,7 @@
     .brain-shell { display: contents; }
     .header-row { grid-column: 1 / -1; }
     .footer-row { grid-column: 1 / -1; }
-    .left-placeholder {
-      background: rgba(255,255,255,0.01);
-      border-right: 1px solid rgba(255,255,255,0.05);
-    }
+    .left-panel { display: flex; flex-direction: column; gap: 8px; padding: 8px; min-height: 0; border-right: 1px solid rgba(255,255,255,0.05); }
     .thought-stream {
       border-left: 1px solid rgba(255,255,255,0.05);
       display: flex;
@@ -1004,6 +1001,15 @@
       );
     }
 
+    // ── LeftPanel ─────────────────────────────────────────────────────────────────
+    function LeftPanel({ children }) {
+      return (
+        <div className="left-panel">
+          {children}
+        </div>
+      );
+    }
+
     // ── App ────────────────────────────────────────────────────────────────────────
     function App() {
       const startMs = useRef(Date.now()).current;
@@ -1030,7 +1036,10 @@
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
           <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} />
-          <div className="left-placeholder" />
+          <LeftPanel>
+            <ClusterMeters stats={stats} />
+            <TopAccessed entries={graph.nodes} focus={focus} setFocus={setFocus} />
+          </LeftPanel>
           <BrainGraph
             nodes={graph.nodes}
             edges={graph.edges}

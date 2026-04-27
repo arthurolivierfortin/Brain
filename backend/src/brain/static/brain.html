@@ -36,6 +36,12 @@
       flex-direction: column;
       overflow: hidden;
     }
+    .cluster-meters .meter-row { display: grid; grid-template-columns: 80px 1fr auto auto; gap: 6px; align-items: center; height: 24px; font-size: 11px; }
+    .cluster-meters .meter-bar { height: 6px; border-radius: 3px; background: #1a1d28; overflow: hidden; }
+    .cluster-meters .meter-bar > span { display: block; height: 100%; }
+    .cluster-meters .trend-up { color: var(--accent); }
+    .cluster-meters .trend-down { color: var(--err); }
+    .cluster-meters .trend-flat { color: var(--dim); }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -923,6 +929,43 @@
               );
             })}
           </ul>
+        </div>
+      );
+    }
+
+    // ── ClusterMeters ─────────────────────────────────────────────────────────────
+    function ClusterMeters({ stats }) {
+      const prevRef = React.useRef({});
+
+      const total = stats?.total ?? 0;
+      const entries = Object.entries(stats?.types ?? {})
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 8);
+
+      const arrows = entries.map(([type, count]) => {
+        const prev = prevRef.current[type];
+        if (prev === undefined) return { type, count, arrow: '→', cls: 'trend-flat' };
+        if (count > prev) return { type, count, arrow: '↑', cls: 'trend-up' };
+        if (count < prev) return { type, count, arrow: '↓', cls: 'trend-down' };
+        return { type, count, arrow: '→', cls: 'trend-flat' };
+      });
+
+      React.useEffect(() => {
+        prevRef.current = stats?.types ?? {};
+      }, [stats]);
+
+      return (
+        <div className="cluster-meters">
+          {arrows.map(({ type, count, arrow, cls }) => (
+            <div key={type} className="meter-row">
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.8 }}>{type}</span>
+              <div className="meter-bar">
+                <span style={{ width: `${total > 0 ? (count / total) * 100 : 0}%`, background: paletteFor(type) }} />
+              </div>
+              <span style={{ fontVariantNumeric: 'tabular-nums', minWidth: '24px', textAlign: 'right' }}>{count}</span>
+              <span className={cls}>{arrow}</span>
+            </div>
+          ))}
         </div>
       );
     }

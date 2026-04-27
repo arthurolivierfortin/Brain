@@ -258,6 +258,47 @@
       return state;
     }
 
+    // ── useThoughts ──────────────────────────────────────────────────────────────
+    function useThoughts(speed, paused, nodeSet, activatedAtRef) {
+      const [state, setState] = useState({ events: [], lastError: null });
+      const prevEventsRef = useRef([]);
+
+      useEffect(() => {
+        if (paused) return;
+        const ctrl = new AbortController();
+        const intervalMs = Math.round(2000 / speed);
+
+        async function fetchData() {
+          try {
+            const r = await fetch('/events?limit=20', { signal: ctrl.signal });
+            const data = await r.json();
+            const newEvents = [...(data.events ?? [])].reverse();
+
+            const prevSet = new Set(prevEventsRef.current.map(e => e.timestamp));
+            for (const ev of newEvents) {
+              if (prevSet.has(ev.timestamp)) continue;
+              const entryId = ev.metadata?.entry_id ?? (ev.node_id || null);
+              if (entryId && nodeSet.has(entryId)) {
+                activatedAtRef.current[entryId] = Date.now();
+              }
+            }
+            prevEventsRef.current = newEvents;
+            setState({ events: newEvents, lastError: null });
+          } catch (err) {
+            if (err.name !== 'AbortError') {
+              setState(s => ({ ...s, lastError: err.message }));
+            }
+          }
+        }
+
+        fetchData();
+        const id = setInterval(fetchData, intervalMs);
+        return () => { clearInterval(id); ctrl.abort(); };
+      }, [speed, paused, nodeSet]);
+
+      return state;
+    }
+
     function useEvents(speed, paused) {
       const [state, setState] = useState({ events: [], lastError: null });
       useEffect(() => {
@@ -705,6 +746,8 @@
       const { stats, queue, lastError: statsError } = useStats(tweaks.speed, paused);
       const { events, lastError: eventsError } = useEvents(tweaks.speed, paused);
       const graph = useGraph();
+      const nodeSet = React.useMemo(() => new Set(graph.nodes.map(n => n.id)), [graph.nodes]);
+      const thoughts = useThoughts(tweaks.speed, paused, nodeSet, activatedAtRef);
       const lastError = statsError || eventsError;
 
       return (
@@ -724,7 +767,7 @@
             paused={paused}
           />
           <ThoughtStream
-            events={[]}
+            events={thoughts.events}
             focus={focus}
             setFocus={setFocus}
           />

@@ -45,6 +45,8 @@
     .top-accessed li.focused { background: #1f2433; outline: 1px solid var(--accent); }
     .top-accessed .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .top-accessed .access-badge { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 10px; }
+    .matrix-view { width: 100%; height: 100%; position: relative; }
+    .matrix-view .cell-overlay { position: absolute; background: #1a1d28; border: 1px solid #2a2f3d; padding: 6px 8px; font-size: 11px; pointer-events: none; white-space: pre; }
     .console-wrap { position: relative; height: 100%; }
     .console-wrap pre { height: 100%; margin: 0; padding: 6px 8px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; font-size: 10px; line-height: 1.4; background: #08090d; }
     .console-line.console-green { color: var(--ok); }
@@ -1015,6 +1017,123 @@
             );
           })}
         </ul>
+      );
+    }
+
+    // ── MatrixView ────────────────────────────────────────────────────────────────
+    function MatrixView({ entries }) {
+      const [selected, setSelected] = React.useState(null);
+      const wrapRef = React.useRef(null);
+      const [svgSize, setSvgSize] = React.useState({ w: 600, h: 400 });
+
+      React.useEffect(() => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => setSvgSize({ w: el.clientWidth || 600, h: el.clientHeight || 400 }));
+        ro.observe(el);
+        setSvgSize({ w: el.clientWidth || 600, h: el.clientHeight || 400 });
+        return () => ro.disconnect();
+      }, []);
+
+      const { agents, types, counts, samples, maxCount } = React.useMemo(() => {
+        const agentSet = new Set(), typeSet = new Set();
+        const counts = {}, samples = {};
+        let maxCount = 0;
+        for (const e of entries || []) {
+          const a = e.agent || '∅';
+          const t = e.memory_type || 'default';
+          agentSet.add(a); typeSet.add(t);
+          counts[a] = counts[a] || {};
+          counts[a][t] = (counts[a][t] || 0) + 1;
+          const k = a + '\x00' + t;
+          samples[k] = samples[k] || [];
+          if (samples[k].length < 5) samples[k].push(e.id);
+          if (counts[a][t] > maxCount) maxCount = counts[a][t];
+        }
+        return { agents: [...agentSet], types: [...typeSet], counts, samples, maxCount };
+      }, [entries]);
+
+      function truncLabel(label) {
+        return label.length > 12 ? label.slice(0, 11) + '…' : label;
+      }
+
+      function cellAlpha(count) {
+        if (!count) return 0;
+        return Math.max(0.1, Math.log(count + 1) / Math.log(maxCount + 1));
+      }
+
+      const LABEL_GUTTER = 80;
+      const TOP_GUTTER = 40;
+      const cellW = agents.length > 0 ? (svgSize.w - LABEL_GUTTER) / agents.length : 0;
+      const cellH = types.length > 0 ? (svgSize.h - TOP_GUTTER) / types.length : 0;
+
+      return (
+        <div ref={wrapRef} className="matrix-view">
+          <svg
+            width={svgSize.w}
+            height={svgSize.h}
+            onClick={e => { if (e.target.tagName === 'svg' || e.target.tagName === 'SVG') setSelected(null); }}
+          >
+            {agents.map((agent, ai) => (
+              <text
+                key={agent}
+                x={LABEL_GUTTER + ai * cellW + cellW / 2}
+                y={TOP_GUTTER - 6}
+                textAnchor="middle"
+                fontSize="9"
+                fill="var(--dim)"
+              >
+                {truncLabel(agent)}
+              </text>
+            ))}
+            {types.map((type, ti) => (
+              <text
+                key={type}
+                x={LABEL_GUTTER - 4}
+                y={TOP_GUTTER + ti * cellH + cellH / 2 + 4}
+                textAnchor="end"
+                fontSize="9"
+                fill="var(--dim)"
+              >
+                {truncLabel(type)}
+              </text>
+            ))}
+            {agents.map((agent, ai) =>
+              types.map((type, ti) => {
+                const count = (counts[agent] && counts[agent][type]) || 0;
+                const alpha = cellAlpha(count);
+                const k = agent + '\x00' + type;
+                const sampleIds = samples[k] || [];
+                const x = LABEL_GUTTER + ai * cellW;
+                const y = TOP_GUTTER + ti * cellH;
+                return (
+                  <rect
+                    key={k}
+                    x={x}
+                    y={y}
+                    width={Math.max(1, cellW - 2)}
+                    height={Math.max(1, cellH - 2)}
+                    fill={`hsla(180, 60%, 50%, ${alpha})`}
+                    style={{ cursor: count > 0 ? 'pointer' : 'default' }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (count === 0) return;
+                      setSelected({ agent, type, count, sampleIds, x, y });
+                    }}
+                  />
+                );
+              })
+            )}
+          </svg>
+          {selected && (
+            <div
+              className="cell-overlay"
+              style={{ left: selected.x + LABEL_GUTTER, top: selected.y + TOP_GUTTER }}
+            >
+              {selected.agent} × {selected.type}{'\n'}count: {selected.count}{'\n'}samples: {selected.sampleIds.join(', ')}
+            </div>
+          )}
+        </div>
       );
     }
 

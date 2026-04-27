@@ -50,8 +50,8 @@
 
 ## Verification gates
 
-- [ ] [GATE-1] `cd backend && python -m ruff check .` passes (Python touched: `backend/tests/test_brain/test_graph_route.py`).
-- [ ] [GATE-2] `cd backend && python -m pytest -q` passes — both the new [TEST-1] and the existing Phase 1 [TEST-1] (`test_monitor_route.py::test_monitor_route_serves_html`) green.
-- [ ] [GATE-3] frontend gates — (skipped — no frontend package touched). The modified `brain.html` is inert HTML+inline JSX served as a static file; there is still no `frontend/` package, no `pnpm` workspace, no JS test runner. Phase 4 introduces the Next.js + Playwright pipeline.
+- [x] [GATE-1] `cd backend && python -m ruff check .` passes (Python touched: `backend/tests/test_brain/test_graph_route.py`).
+- [x] [GATE-2] `cd backend && python -m pytest -q` passes — both the new [TEST-1] and the existing Phase 1 [TEST-1] (`test_monitor_route.py::test_monitor_route_serves_html`) green. 193 passed (192 baseline + 1 new).
+- [x] [GATE-3] frontend gates — skipped (no frontend package touched). The modified `brain.html` is inert HTML+inline JSX served as a static file; there is still no `frontend/` package, no `pnpm` workspace, no JS test runner. Phase 4 introduces the Next.js + Playwright pipeline.
 
 **Note:** mypy is NOT a hard gate for Brain (99+ pre-existing errors on main, tracked as `docs/improvements/` P2 per CLAUDE.md). Builder may run for advisory signal; failures don't block.

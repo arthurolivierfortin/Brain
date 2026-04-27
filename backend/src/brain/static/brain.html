@@ -284,6 +284,81 @@
       return state;
     }
 
+    // ── paletteFor ───────────────────────────────────────────────────────────────
+    function paletteFor(memoryType) {
+      const P = {
+        fact:         '#6fd6c9',
+        preference:   '#b48ead',
+        context:      '#ebcb8b',
+        decision:     '#a3be8c',
+        event:        '#88c0d0',
+        strategy:     '#d08770',
+        relationship: '#bf616a',
+      };
+      return P[memoryType] ?? '#5d6478';
+    }
+
+    // ── useGraph ─────────────────────────────────────────────────────────────────
+    function useGraph() {
+      const [state, setState] = React.useState({
+        nodes: [], edges: [], lastError: null, lastFetchedAt: null, isLoading: false,
+      });
+      const fetchRef = React.useRef(null);
+
+      function doFetch() {
+        if (fetchRef.current) fetchRef.current.abort();
+        const ctrl = new AbortController();
+        fetchRef.current = ctrl;
+        setState(s => ({ ...s, isLoading: true }));
+
+        fetch('/graph', { signal: ctrl.signal })
+          .then(r => r.json())
+          .then(data => {
+            const rawEntries = data.entries ?? [];
+            if (rawEntries.length > 500) {
+              setState({ nodes: [], edges: [], lastError: 'graph too large', lastFetchedAt: Date.now(), isLoading: false });
+              return;
+            }
+            const nodeSet = new Set(rawEntries.map(e => e.id));
+            const nodes = rawEntries.map(e => ({
+              id: e.id,
+              memory_type: e.memory_type,
+              color: paletteFor(e.memory_type),
+              size: 4 + Math.log((e.access_count ?? 0) + 1) * 2,
+              access_count: e.access_count ?? 0,
+              x: (Math.random() - 0.5) * 200,
+              y: (Math.random() - 0.5) * 200,
+              vx: 0, vy: 0,
+              fx: null, fy: null,
+            }));
+            const seen = new Set();
+            const edges = [];
+            rawEntries.forEach(e => {
+              const linkIds = e.links ? e.links.split(',').map(s => s.trim()).filter(Boolean) : [];
+              linkIds.forEach(lid => {
+                if (!nodeSet.has(lid)) return;
+                const key = e.id < lid ? `${e.id}|${lid}` : `${lid}|${e.id}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                edges.push([e.id < lid ? e.id : lid, e.id < lid ? lid : e.id]);
+              });
+            });
+            setState({ nodes, edges, lastError: null, lastFetchedAt: Date.now(), isLoading: false });
+          })
+          .catch(err => {
+            if (err.name === 'AbortError') return;
+            setState(s => ({ ...s, lastError: err.message, isLoading: false }));
+          });
+      }
+
+      React.useEffect(() => {
+        doFetch();
+        return () => { if (fetchRef.current) fetchRef.current.abort(); };
+      }, []);
+
+      return { ...state, refresh: doFetch };
+    }
+
     // ── BrainGraph (stub — replaced by [SPEC-3]+) ─────────────────────────────────
     function BrainGraph() {
       return <div style={{ overflow: "hidden" }} />;
@@ -311,6 +386,7 @@
       const paused = docHidden || !tweaks.running;
       const { stats, queue, lastError: statsError } = useStats(tweaks.speed, paused);
       const { events, lastError: eventsError } = useEvents(tweaks.speed, paused);
+      const graph = useGraph();
       const lastError = statsError || eventsError;
 
       return (

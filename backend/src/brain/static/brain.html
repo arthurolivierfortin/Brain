@@ -489,6 +489,20 @@
       ctx.restore();
     }
 
+    // ── hitTest ───────────────────────────────────────────────────────────────────
+    function hitTest(clientX, clientY, rect, view, nodes) {
+      const wx = (clientX - rect.left - view.x) / view.k;
+      const wy = (clientY - rect.top - view.y) / view.k;
+      let closest = null, minD2 = Infinity;
+      for (const n of nodes) {
+        const dx = n.x - wx, dy = n.y - wy;
+        const d2 = dx * dx + dy * dy;
+        const threshold = n.size + 4;
+        if (d2 < threshold * threshold && d2 < minD2) { minD2 = d2; closest = n; }
+      }
+      return { node: closest, wx, wy };
+    }
+
     // ── BrainGraph ────────────────────────────────────────────────────────────────
     function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused }) {
       const wrapRef = React.useRef(null);
@@ -496,6 +510,62 @@
       const [size, setSize] = React.useState({ w: 600, h: 400 });
       const viewRef = React.useRef({ x: 0, y: 0, k: 1 });
       const dragNodeRef = React.useRef(null);
+      const mouseDownRef = React.useRef(null);
+      const panStartRef = React.useRef(null);
+
+      function handleMouseDown(e) {
+        if (e.button !== 0) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const { node, wx, wy } = hitTest(e.clientX, e.clientY, rect, viewRef.current, nodes);
+        mouseDownRef.current = { x: e.clientX, y: e.clientY, wx, wy, node };
+        if (node) {
+          node.fx = wx; node.fy = wy;
+          dragNodeRef.current = node;
+        } else {
+          panStartRef.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y };
+        }
+      }
+
+      function handleMouseMove(e) {
+        if (!mouseDownRef.current) return;
+        const { node } = mouseDownRef.current;
+        if (node) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          const wx = (e.clientX - rect.left - viewRef.current.x) / viewRef.current.k;
+          const wy = (e.clientY - rect.top - viewRef.current.y) / viewRef.current.k;
+          node.fx = wx; node.fy = wy;
+        } else if (panStartRef.current) {
+          viewRef.current.x = panStartRef.current.vx + (e.clientX - panStartRef.current.x);
+          viewRef.current.y = panStartRef.current.vy + (e.clientY - panStartRef.current.y);
+        }
+      }
+
+      function handleMouseUp(e) {
+        if (!mouseDownRef.current) return;
+        const { x, y, node } = mouseDownRef.current;
+        const moved = Math.hypot(e.clientX - x, e.clientY - y);
+        if (node) {
+          node.fx = null; node.fy = null;
+          dragNodeRef.current = null;
+          if (moved < 3) {
+            setFocus(prev => prev === node.id ? null : node.id);
+          }
+        } else {
+          if (moved < 3) setFocus(null);
+          panStartRef.current = null;
+        }
+        mouseDownRef.current = null;
+      }
+
+      function handleMouseLeave() {
+        if (mouseDownRef.current?.node) {
+          const n = mouseDownRef.current.node;
+          n.fx = null; n.fy = null;
+          dragNodeRef.current = null;
+        }
+        panStartRef.current = null;
+        mouseDownRef.current = null;
+      }
 
       React.useEffect(() => {
         const el = wrapRef.current;
@@ -556,7 +626,16 @@
 
       return (
         <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-          <canvas ref={canvasRef} width={size.w} height={size.h} style={{ display: 'block' }} />
+          <canvas
+            ref={canvasRef}
+            width={size.w}
+            height={size.h}
+            style={{ display: 'block', cursor: panStartRef.current ? 'grabbing' : 'grab' }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+          />
         </div>
       );
     }

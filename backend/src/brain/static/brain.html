@@ -12,6 +12,7 @@
       --swap: #ebcb8b;
       --ok: #a3be8c;
       --err: #bf616a;
+      --dim: #5d6478;
       --font: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -84,7 +85,7 @@
     }
 
     // ── Header ────────────────────────────────────────────────────────────────────
-    function Header({ stats, queue, lastError, startMs }) {
+    function Header({ stats, queue, lastError, startMs, buckets }) {
       const types = Object.entries(stats?.types ?? {})
         .sort(([, a], [, b]) => b - a)
         .slice(0, 8);
@@ -107,6 +108,7 @@
               <span style={{ padding: "1px 6px", borderRadius: "3px", background: "rgba(255,255,255,0.1)" }}>
                 phase 2b
               </span>
+              <ActivitySparkline buckets={buckets} />
               <span style={{
                 width: "8px", height: "8px", borderRadius: "50%",
                 background: lastError ? "var(--err)" : "var(--ok)",
@@ -297,6 +299,110 @@
       }, [speed, paused, nodeSet]);
 
       return state;
+    }
+
+    // ── useTimeline ───────────────────────────────────────────────────────────────
+    function useTimeline() {
+      const [state, setState] = useState({ buckets: [], lastError: null });
+
+      useEffect(() => {
+        const ctrl = new AbortController();
+
+        async function fetchData() {
+          if (document.hidden) return;
+          try {
+            const r = await fetch('/events/timeline', { signal: ctrl.signal });
+            const data = await r.json();
+            setState({ buckets: data.timeline ?? [], lastError: null });
+          } catch (err) {
+            if (err.name !== 'AbortError') {
+              setState(s => ({ ...s, lastError: err.message }));
+            }
+          }
+        }
+
+        fetchData();
+        const id = setInterval(fetchData, 60000);
+        return () => { clearInterval(id); ctrl.abort(); };
+      }, []);
+
+      return state;
+    }
+
+    // ── ActivitySparkline ─────────────────────────────────────────────────────────
+    function ActivitySparkline({ buckets }) {
+      const [tooltip, setTooltip] = useState(null);
+
+      if (!buckets || buckets.length === 0) {
+        return (
+          <svg viewBox="0 0 120 16" width="120" height="16" style={{ flexShrink: 0 }}>
+            <rect width="120" height="16" fill="var(--dim)" opacity="0.2" />
+          </svg>
+        );
+      }
+
+      const TYPES = ['archived', 'merged', 'reinforced', 'searched', 'stored'];
+      const COLORS = {
+        stored:     'var(--ok)',
+        searched:   'var(--accent)',
+        reinforced: '#7da9d8',
+        merged:     'var(--swap)',
+        archived:   'var(--dim)',
+      };
+
+      const totals = buckets.map(b => TYPES.reduce((s, t) => s + (b[t] ?? 0), 0));
+      const maxTotal = Math.max(1, ...totals);
+
+      const allZero = totals.every(t => t === 0);
+      if (allZero) {
+        return (
+          <svg viewBox="0 0 120 16" width="120" height="16" style={{ flexShrink: 0 }}>
+            <rect width="120" height="16" fill="var(--dim)" opacity="0.2" />
+          </svg>
+        );
+      }
+
+      const bars = buckets.map((b, i) => {
+        const barX = i * 5;
+        let yOff = 16;
+        const rects = [];
+        for (const t of TYPES) {
+          const count = b[t] ?? 0;
+          if (count === 0) continue;
+          const h = (count / maxTotal) * 16;
+          yOff -= h;
+          rects.push(<rect key={t} x={barX} y={yOff} width="4" height={h} fill={COLORS[t]} />);
+        }
+        return (
+          <g key={i}
+            onMouseEnter={() => setTooltip({ i, x: barX, b })}
+            onMouseLeave={() => setTooltip(null)}
+            style={{ cursor: 'default' }}
+          >
+            {rects}
+          </g>
+        );
+      });
+
+      return (
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <svg viewBox="0 0 120 16" width="120" height="16" style={{ flexShrink: 0, display: 'block' }}>
+            {bars}
+          </svg>
+          {tooltip && (
+            <div style={{
+              position: 'absolute', bottom: '20px', left: `${tooltip.x}px`,
+              background: 'rgba(10,10,18,0.95)', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '3px', padding: '4px 6px', fontSize: '10px', whiteSpace: 'nowrap',
+              pointerEvents: 'none', zIndex: 10,
+            }}>
+              {TYPES.filter(t => tooltip.b[t] > 0).map(t => (
+                <div key={t}>{t}: {tooltip.b[t]}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
     }
 
     function useEvents(speed, paused) {
@@ -806,11 +912,12 @@
       const graph = useGraph();
       const nodeSet = React.useMemo(() => new Set(graph.nodes.map(n => n.id)), [graph.nodes]);
       const thoughts = useThoughts(tweaks.speed, paused, nodeSet, activatedAtRef);
+      const timeline = useTimeline();
       const lastError = statsError || eventsError;
 
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
-          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} />
+          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} />
           <div className="left-placeholder" />
           <BrainGraph
             nodes={graph.nodes}

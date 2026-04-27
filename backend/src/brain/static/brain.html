@@ -359,9 +359,54 @@
       return { ...state, refresh: doFetch };
     }
 
-    // ── BrainGraph (stub — replaced by [SPEC-3]+) ─────────────────────────────────
-    function BrainGraph() {
-      return <div style={{ overflow: "hidden" }} />;
+    // ── BrainGraph ────────────────────────────────────────────────────────────────
+    function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused }) {
+      const wrapRef = React.useRef(null);
+      const canvasRef = React.useRef(null);
+      const [size, setSize] = React.useState({ w: 600, h: 400 });
+      const viewRef = React.useRef({ x: 0, y: 0, k: 1 });
+      const dragNodeRef = React.useRef(null);
+
+      React.useEffect(() => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => {
+          const w = el.clientWidth || 600;
+          const h = el.clientHeight || 400;
+          setSize({ w, h });
+          if (canvasRef.current) {
+            canvasRef.current.width = w;
+            canvasRef.current.height = h;
+          }
+        });
+        ro.observe(el);
+        const w = el.clientWidth || 600;
+        const h = el.clientHeight || 400;
+        setSize({ w, h });
+        if (canvasRef.current) { canvasRef.current.width = w; canvasRef.current.height = h; }
+        return () => ro.disconnect();
+      }, []);
+
+      if (lastError === 'graph too large') {
+        return (
+          <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg)', opacity: 0.5, fontSize: '12px' }}>
+            graph too large to render — use search instead
+          </div>
+        );
+      }
+      if (lastError) {
+        return (
+          <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--err)', fontSize: '12px' }}>
+            ouch — failed to load graph: {lastError}
+          </div>
+        );
+      }
+
+      return (
+        <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+          <canvas ref={canvasRef} width={size.w} height={size.h} style={{ display: 'block' }} />
+        </div>
+      );
     }
 
     // ── ThoughtStream (stub — replaced by [SPEC-12]) ──────────────────────────────
@@ -394,6 +439,12 @@
           <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} />
           <div className="left-placeholder" />
           <BrainGraph
+            nodes={graph.nodes}
+            edges={graph.edges}
+            lastError={graph.lastError}
+            isLoading={graph.isLoading}
+            lastFetchedAt={graph.lastFetchedAt}
+            onRefresh={graph.refresh}
             focus={focus}
             setFocus={setFocus}
             activatedAtRef={activatedAtRef}

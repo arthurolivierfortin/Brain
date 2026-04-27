@@ -359,6 +359,136 @@
       return { ...state, refresh: doFetch };
     }
 
+    // ── simulate ──────────────────────────────────────────────────────────────────
+    function simulate(nodes, edges, size, dragNode, nodeById) {
+      const cx = size.w / 2, cy = size.h / 2;
+      const REPULSE_SAME = 220;
+      const REPULSE_CROSS = 380;
+      const SPRING_K = 0.02;
+      const CENTER_K = 0.0005;
+      const CLUSTER_K = 0.001;
+      const DAMP = 0.85;
+      const DT = 0.5;
+      const MARGIN = 30;
+
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          let d2 = dx * dx + dy * dy;
+          if (d2 < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+          const sameType = a.memory_type === b.memory_type;
+          const k = sameType ? REPULSE_SAME : REPULSE_CROSS;
+          const f = k / d2;
+          const d = Math.sqrt(d2);
+          a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+          b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+        }
+      }
+
+      for (const [aId, bId] of edges) {
+        const a = nodeById.get(aId), b = nodeById.get(bId);
+        if (!a || !b) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const target = 80 + (a.size + b.size) / 2;
+        const f = (d - target) * SPRING_K;
+        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+      }
+
+      for (const n of nodes) {
+        n.vx += (cx - n.x) * CENTER_K;
+        n.vy += (cy - n.y) * CENTER_K;
+      }
+
+      const sums = {};
+      for (const n of nodes) {
+        const s = sums[n.memory_type] ??= { x: 0, y: 0, n: 0 };
+        s.x += n.x; s.y += n.y; s.n += 1;
+      }
+      for (const t of Object.keys(sums)) {
+        sums[t].x /= sums[t].n; sums[t].y /= sums[t].n;
+      }
+      for (const n of nodes) {
+        const s = sums[n.memory_type];
+        n.vx += (s.x - n.x) * CLUSTER_K;
+        n.vy += (s.y - n.y) * CLUSTER_K;
+      }
+
+      for (const n of nodes) {
+        if (n === dragNode || n.fx != null) {
+          n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; continue;
+        }
+        n.vx *= DAMP; n.vy *= DAMP;
+        n.x += n.vx * DT; n.y += n.vy * DT;
+        if (n.x < MARGIN) n.vx += (MARGIN - n.x) * 0.05;
+        if (n.x > size.w - MARGIN) n.vx += (size.w - MARGIN - n.x) * 0.05;
+        if (n.y < MARGIN) n.vy += (MARGIN - n.y) * 0.05;
+        if (n.y > size.h - MARGIN) n.vy += (size.h - MARGIN - n.y) * 0.05;
+      }
+    }
+
+    // ── render ────────────────────────────────────────────────────────────────────
+    function render(ctx, nodes, edges, view, activatedAt, focus, nodeById) {
+      const now = Date.now();
+      ctx.save();
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.translate(view.x, view.y);
+      ctx.scale(view.k, view.k);
+
+      let edgeFocusSet = null;
+      if (focus) {
+        edgeFocusSet = new Set([focus]);
+        for (const [aId, bId] of edges) {
+          if (aId === focus) edgeFocusSet.add(bId);
+          if (bId === focus) edgeFocusSet.add(aId);
+        }
+      }
+
+      ctx.lineWidth = 1;
+      for (const [aId, bId] of edges) {
+        const a = nodeById.get(aId), b = nodeById.get(bId);
+        if (!a || !b) continue;
+        const inFocus = focus && (focus === aId || focus === bId);
+        const eitherActive = (now - (activatedAt[aId] ?? 0) < 5000) || (now - (activatedAt[bId] ?? 0) < 5000);
+        ctx.globalAlpha = focus ? (inFocus ? 0.9 : 0.05) : (eitherActive ? 0.5 : 0.15);
+        ctx.strokeStyle = a.memory_type === b.memory_type ? a.color : '#3a3f4d';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+
+      for (const n of nodes) {
+        const t = activatedAt[n.id];
+        if (!t) continue;
+        const age = now - t;
+        if (age >= 5000) continue;
+        ctx.globalAlpha = 1 - age / 5000;
+        ctx.fillStyle = n.color;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.size + 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const edgeSetTouchingFocus = edgeFocusSet;
+      for (const n of nodes) {
+        const dim = focus && focus !== n.id && !(edgeSetTouchingFocus && edgeSetTouchingFocus.has(n.id));
+        ctx.globalAlpha = dim ? 0.18 : 1;
+        ctx.fillStyle = n.color;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.size, 0, Math.PI * 2);
+        ctx.fill();
+        if (focus === n.id) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+
     // ── BrainGraph ────────────────────────────────────────────────────────────────
     function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused }) {
       const wrapRef = React.useRef(null);
@@ -386,6 +516,28 @@
         if (canvasRef.current) { canvasRef.current.width = w; canvasRef.current.height = h; }
         return () => ro.disconnect();
       }, []);
+
+      const nodeById = React.useMemo(
+        () => new Map(nodes.map(n => [n.id, n])),
+        [nodes]
+      );
+
+      React.useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || nodes.length === 0) return;
+        const ctx = canvas.getContext('2d');
+        let rafId;
+
+        const tick = () => {
+          if (!paused) {
+            simulate(nodes, edges, size, dragNodeRef.current, nodeById);
+            render(ctx, nodes, edges, viewRef.current, activatedAtRef.current, focus, nodeById);
+          }
+          rafId = requestAnimationFrame(tick);
+        };
+        rafId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafId);
+      }, [nodes, edges, size, paused, focus, nodeById, activatedAtRef]);
 
       if (lastError === 'graph too large') {
         return (

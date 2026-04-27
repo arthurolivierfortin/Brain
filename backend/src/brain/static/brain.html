@@ -32,8 +32,270 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    // ── helpers ──────────────────────────────────────────────────────────────────
+    function formatRelative(iso) {
+      const diffSec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+      if (diffSec < 60) return `${diffSec}s ago`;
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+      return `${Math.floor(diffSec / 3600)}h ago`;
+    }
+
+    function formatUptime(startMs) {
+      const totalSec = Math.floor((Date.now() - startMs) / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      return `${h}h:${String(m).padStart(2, "0")}m`;
+    }
+
+    // ── Bar component ─────────────────────────────────────────────────────────────
+    function Bar({ label, value, max, color, redZone }) {
+      const pct = Math.min(1, value / Math.max(max, 1));
+      const isRed = redZone && value > redZone;
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+          <span style={{ width: "90px", textAlign: "right", color: "var(--fg)", opacity: 0.7 }}>{label}</span>
+          <div style={{ flex: 1, height: "10px", background: "rgba(255,255,255,0.07)", borderRadius: "2px" }}>
+            <div style={{
+              width: `${(pct * 100).toFixed(1)}%`,
+              height: "100%",
+              background: isRed ? "var(--err)" : color,
+              borderRadius: "2px",
+              transition: "width 0.4s",
+            }} />
+          </div>
+          <span style={{ width: "40px", fontSize: "11px", opacity: 0.8 }}>
+            {(pct * 100).toFixed(0)}%
+          </span>
+        </div>
+      );
+    }
+
+    // ── Header ────────────────────────────────────────────────────────────────────
+    function Header({ stats, queue, lastError, startMs }) {
+      const types = Object.entries(stats?.types ?? {})
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 8);
+      const extra = Object.keys(stats?.types ?? {}).length - 8;
+      const total = stats?.total ?? 0;
+
+      return (
+        <header style={{
+          padding: "10px 16px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.02)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "center" }}>
+            <span style={{ color: "var(--accent)", fontWeight: "bold", letterSpacing: "0.05em" }}>
+              brain · live monitor
+            </span>
+            <div style={{ display: "flex", gap: "16px", fontSize: "11px", alignItems: "center" }}>
+              <span>total: <b>{total.toLocaleString()}</b></span>
+              <span>uptime: <b>{formatUptime(startMs)}</b></span>
+              <span style={{ padding: "1px 6px", borderRadius: "3px", background: "rgba(255,255,255,0.1)" }}>
+                phase 2b
+              </span>
+              <span style={{
+                width: "8px", height: "8px", borderRadius: "50%",
+                background: lastError ? "var(--err)" : "var(--ok)",
+                display: "inline-block",
+              }} title={lastError ?? "ok"} />
+            </div>
+          </div>
+
+          {/* cluster cores */}
+          <div style={{ marginBottom: "6px" }}>
+            {types.map(([type, count]) => (
+              <Bar
+                key={type}
+                label={type}
+                value={count}
+                max={total || 1}
+                color="var(--accent)"
+              />
+            ))}
+            {extra > 0 && (
+              <div style={{ fontSize: "11px", opacity: 0.5, paddingLeft: "96px" }}>+{extra} more types</div>
+            )}
+          </div>
+
+          <Bar label="mem" value={total} max={16384} color="var(--mem)" />
+          <Bar label="swap" value={queue?.pending ?? 0} max={100} color="var(--swap)" redZone={100} />
+        </header>
+      );
+    }
+
+    // ── Footer ─────────────────────────────────────────────────────────────────────
+    function Footer({ events }) {
+      return (
+        <footer style={{
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          overflowY: "auto",
+          padding: "6px 12px",
+        }}>
+          {(events ?? []).map((ev, i) => {
+            const type = ev.event_type ?? "";
+            let badgeColor = "#555";
+            if (type === "hook_wake_up") badgeColor = "var(--ok)";
+            else if (type === "hook_post_turn") badgeColor = "var(--accent)";
+            else if (type.includes("reject")) badgeColor = "var(--swap)";
+            else if (type.includes("error") || type.includes("failed")) badgeColor = "var(--err)";
+
+            const details = (ev.details ?? "").slice(0, 120);
+            return (
+              <div key={i} style={{ display: "flex", gap: "8px", padding: "2px 0", fontSize: "12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ padding: "0 4px", borderRadius: "2px", background: badgeColor, color: "#000", flexShrink: 0, fontSize: "10px" }}>
+                  {type}
+                </span>
+                <span style={{ opacity: 0.7, flexShrink: 0 }}>{ev.agent ?? ""}</span>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {details}
+                </span>
+                <span style={{ opacity: 0.5, flexShrink: 0, fontSize: "11px" }}>
+                  {formatRelative(ev.timestamp)}
+                </span>
+              </div>
+            );
+          })}
+        </footer>
+      );
+    }
+
+    // ── TweaksPanel ────────────────────────────────────────────────────────────────
+    function useTweaks() {
+      const [tweaks, setTweaks] = useState({ accent: "#6fd6c9", speed: 1, running: true });
+      useEffect(() => {
+        document.documentElement.style.setProperty("--accent", tweaks.accent);
+      }, [tweaks.accent]);
+      return { tweaks, setTweaks };
+    }
+
+    function TweaksPanel({ tweaks, setTweaks }) {
+      const [open, setOpen] = useState(false);
+      return (
+        <div style={{ position: "fixed", bottom: "190px", right: "12px", zIndex: 100 }}>
+          <button
+            onClick={() => setOpen(o => !o)}
+            style={{ background: "var(--accent)", color: "#000", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontFamily: "var(--font)", fontSize: "12px" }}
+          >
+            {open ? "close" : "tweaks"}
+          </button>
+          {open && (
+            <div style={{ marginTop: "6px", background: "#1a1a22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "6px", padding: "10px 14px", display: "flex", flexDirection: "column", gap: "8px", minWidth: "180px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="checkbox"
+                  checked={tweaks.running}
+                  onChange={e => setTweaks(t => ({ ...t, running: e.target.checked }))}
+                />
+                polling on
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                speed
+                <select
+                  value={tweaks.speed}
+                  onChange={e => setTweaks(t => ({ ...t, speed: Number(e.target.value) }))}
+                  style={{ background: "#222", color: "var(--fg)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "3px" }}
+                >
+                  <option value={0.5}>0.5×</option>
+                  <option value={1}>1×</option>
+                  <option value={2}>2×</option>
+                </select>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                accent
+                <input
+                  type="color"
+                  value={tweaks.accent}
+                  onChange={e => setTweaks(t => ({ ...t, accent: e.target.value }))}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── Hooks ──────────────────────────────────────────────────────────────────────
+    function useStats(speed, paused) {
+      const [state, setState] = useState({ stats: null, queue: null, lastError: null });
+      useEffect(() => {
+        if (paused) return;
+        const ctrl = new AbortController();
+        const intervalMs = Math.round(5000 / speed);
+
+        async function fetchData() {
+          try {
+            const [sr, qr] = await Promise.all([
+              fetch("/stats", { signal: ctrl.signal }),
+              fetch("/queue/status", { signal: ctrl.signal }),
+            ]);
+            const [statsData, queueData] = await Promise.all([sr.json(), qr.json()]);
+            setState({ stats: statsData, queue: queueData, lastError: null });
+          } catch (err) {
+            if (err.name !== "AbortError") {
+              setState(s => ({ ...s, lastError: err.message }));
+            }
+          }
+        }
+
+        fetchData();
+        const id = setInterval(fetchData, intervalMs);
+        return () => { clearInterval(id); ctrl.abort(); };
+      }, [speed, paused]);
+      return state;
+    }
+
+    function useEvents(speed, paused) {
+      const [state, setState] = useState({ events: [], lastError: null });
+      useEffect(() => {
+        if (paused) return;
+        const ctrl = new AbortController();
+        const intervalMs = Math.round(2000 / speed);
+
+        async function fetchData() {
+          try {
+            const r = await fetch("/events?limit=200", { signal: ctrl.signal });
+            const data = await r.json();
+            setState({ events: [...(data.events ?? [])].reverse(), lastError: null });
+          } catch (err) {
+            if (err.name !== "AbortError") {
+              setState(s => ({ ...s, lastError: err.message }));
+            }
+          }
+        }
+
+        fetchData();
+        const id = setInterval(fetchData, intervalMs);
+        return () => { clearInterval(id); ctrl.abort(); };
+      }, [speed, paused]);
+      return state;
+    }
+
+    // ── App ────────────────────────────────────────────────────────────────────────
     function App() {
-      return <div className="brain-shell" />;
+      const startMs = useRef(Date.now()).current;
+      const [docHidden, setDocHidden] = useState(document.hidden);
+      const { tweaks, setTweaks } = useTweaks();
+
+      useEffect(() => {
+        const onVisibility = () => setDocHidden(document.hidden);
+        document.addEventListener("visibilitychange", onVisibility);
+        return () => document.removeEventListener("visibilitychange", onVisibility);
+      }, []);
+
+      const paused = docHidden || !tweaks.running;
+      const { stats, queue, lastError: statsError } = useStats(tweaks.speed, paused);
+      const { events, lastError: eventsError } = useEvents(tweaks.speed, paused);
+      const lastError = statsError || eventsError;
+
+      return (
+        <div className="brain-shell" style={{ display: "contents" }}>
+          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} />
+          <main style={{ overflow: "hidden" }} />
+          <Footer events={events} />
+          <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} />
+        </div>
+      );
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);

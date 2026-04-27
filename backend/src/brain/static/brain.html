@@ -470,6 +470,8 @@
             const nodes = rawEntries.map(e => ({
               id: e.id,
               memory_type: e.memory_type,
+              agent: e.agent ?? '∅',
+              content: e.content ?? '',
               color: paletteFor(e.memory_type),
               size: 4 + Math.log((e.access_count ?? 0) + 1) * 2,
               access_count: e.access_count ?? 0,

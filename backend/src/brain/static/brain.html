@@ -567,6 +567,29 @@
         mouseDownRef.current = null;
       }
 
+      // Wheel listener attached imperatively with { passive: false }
+      // so e.preventDefault() suppresses the page scroll. React's onWheel
+      // is passive by default since v17.
+      React.useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const handler = (e) => {
+          e.preventDefault();
+          const rect = canvas.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+          const my = e.clientY - rect.top;
+          const factor = Math.exp(-e.deltaY * 0.001);
+          const newK = Math.max(0.4, Math.min(3, viewRef.current.k * factor));
+          const wx = (mx - viewRef.current.x) / viewRef.current.k;
+          const wy = (my - viewRef.current.y) / viewRef.current.k;
+          viewRef.current.x = mx - wx * newK;
+          viewRef.current.y = my - wy * newK;
+          viewRef.current.k = newK;
+        };
+        canvas.addEventListener('wheel', handler, { passive: false });
+        return () => canvas.removeEventListener('wheel', handler);
+      }, [size]);
+
       React.useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;

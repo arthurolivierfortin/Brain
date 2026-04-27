@@ -176,10 +176,43 @@
     }
 
     // ── TweaksPanel ────────────────────────────────────────────────────────────────
-    function useTweaks() {
-      const [tweaks, setTweaks] = useState({ accent: "#6fd6c9", speed: 1, running: true });
+    const TWEAK_DEFAULTS = { accent: '#6fd6c9', speed: 1, running: true, tab: 'graph' };
+    const STORAGE_KEY = 'brain-monitor-tweaks-v1';
+    let warnedAboutStorage = false;
+
+    function readStoredTweaks(defaults) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaults;
+        const parsed = JSON.parse(raw);
+        return { ...defaults, ...parsed };
+      } catch (err) {
+        if (!warnedAboutStorage) {
+          console.warn('[brain-monitor] localStorage unavailable; tweaks will not persist this session');
+          warnedAboutStorage = true;
+        }
+        return defaults;
+      }
+    }
+
+    function useTweaks(defaults) {
+      const [tweaks, setTweaksRaw] = useState(() => readStoredTweaks(defaults));
+      const setTweaks = React.useCallback((updater) => {
+        setTweaksRaw(prev => {
+          const next = typeof updater === 'function' ? updater(prev) : updater;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          } catch (err) {
+            if (!warnedAboutStorage) {
+              console.warn('[brain-monitor] localStorage unavailable; tweaks will not persist this session');
+              warnedAboutStorage = true;
+            }
+          }
+          return next;
+        });
+      }, []);
       useEffect(() => {
-        document.documentElement.style.setProperty("--accent", tweaks.accent);
+        document.documentElement.style.setProperty('--accent', tweaks.accent);
       }, [tweaks.accent]);
       return { tweaks, setTweaks };
     }
@@ -898,7 +931,7 @@
     function App() {
       const startMs = useRef(Date.now()).current;
       const [docHidden, setDocHidden] = useState(document.hidden);
-      const { tweaks, setTweaks } = useTweaks();
+      const { tweaks, setTweaks } = useTweaks(TWEAK_DEFAULTS);
       const [focus, setFocus] = useState(null);
       const activatedAtRef = useRef({});
 

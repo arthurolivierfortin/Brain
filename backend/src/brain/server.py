@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -237,6 +238,19 @@ def create_http_app():
                 })
             elif parsed.path == "/health":
                 self._json_response({"status": "ok", "total": get_store()._collection.count()})
+            elif parsed.path == "/monitor":
+                _html_path = Path(__file__).parent / "static" / "brain.html"
+                try:
+                    _html_bytes = _html_path.read_bytes()
+                except FileNotFoundError:
+                    self._json_response({"error": "monitor template missing"}, status=500)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(_html_bytes)
             else:
                 self._json_response({"error": "not found"}, status=404)
 

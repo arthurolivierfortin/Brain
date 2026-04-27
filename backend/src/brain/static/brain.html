@@ -42,6 +42,12 @@
     .cluster-meters .trend-up { color: var(--accent); }
     .cluster-meters .trend-down { color: var(--err); }
     .cluster-meters .trend-flat { color: var(--dim); }
+    .top-accessed { flex: 1; min-height: 0; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+    .top-accessed li { display: grid; grid-template-columns: 8px 1fr auto; gap: 6px; align-items: center; padding: 4px 6px; cursor: pointer; font-size: 11px; }
+    .top-accessed li:hover { background: #161922; }
+    .top-accessed li.focused { background: #1f2433; outline: 1px solid var(--accent); }
+    .top-accessed .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .top-accessed .access-badge { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 10px; }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -967,6 +973,34 @@
             </div>
           ))}
         </div>
+      );
+    }
+
+    // ── TopAccessed ───────────────────────────────────────────────────────────────
+    function TopAccessed({ entries, focus, setFocus }) {
+      const top10 = [...(entries ?? [])]
+        .sort((a, b) => (b.access_count ?? 0) - (a.access_count ?? 0))
+        .slice(0, 10);
+
+      return (
+        <ul className="top-accessed">
+          {top10.map(entry => {
+            const raw = entry.content ?? '';
+            const snippet = raw.slice(0, 40) + (raw.length > 40 ? '…' : '');
+            const isFocused = focus === entry.id;
+            return (
+              <li
+                key={entry.id}
+                className={isFocused ? 'focused' : ''}
+                onClick={() => setFocus(isFocused ? null : entry.id)}
+              >
+                <span className="dot" style={{ background: paletteFor(entry.memory_type) }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{snippet}</span>
+                <span className="access-badge">{entry.access_count ?? 0}</span>
+              </li>
+            );
+          })}
+        </ul>
       );
     }
 

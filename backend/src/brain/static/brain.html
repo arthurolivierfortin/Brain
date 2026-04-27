@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>brain · live monitor</title>
+  <style>
+    :root {
+      --bg: #0b0b0f;
+      --fg: #c5c8d3;
+      --accent: #6fd6c9;
+      --mem: #b48ead;
+      --swap: #ebcb8b;
+      --ok: #a3be8c;
+      --err: #bf616a;
+      --font: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; }
+    #root {
+      display: grid;
+      grid-template-rows: auto 1fr 180px;
+      height: 100vh;
+    }
+    .brain-shell { display: contents; }
+  </style>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      return <div className="brain-shell" />;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

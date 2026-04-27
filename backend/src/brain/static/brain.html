@@ -45,6 +45,14 @@
     .top-accessed li.focused { background: #1f2433; outline: 1px solid var(--accent); }
     .top-accessed .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .top-accessed .access-badge { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 10px; }
+    .console-wrap { position: relative; height: 100%; }
+    .console-wrap pre { height: 100%; margin: 0; padding: 6px 8px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; font-size: 10px; line-height: 1.4; background: #08090d; }
+    .console-line.console-green { color: var(--ok); }
+    .console-line.console-cyan { color: var(--accent); }
+    .console-line.console-yellow { color: var(--swap); }
+    .console-line.console-red { color: var(--err); }
+    .console-line.console-grey { color: var(--dim); }
+    .follow-pill { position: absolute; top: 8px; right: 8px; background: var(--accent); color: var(--bg); border: none; padding: 2px 8px; cursor: pointer; font-family: inherit; font-size: 10px; }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -68,6 +76,15 @@
       const h = Math.floor(totalSec / 3600);
       const m = Math.floor((totalSec % 3600) / 60);
       return `${h}h:${String(m).padStart(2, "0")}m`;
+    }
+
+    function classifyEvent(eventType) {
+      const t = eventType ?? '';
+      if (t === 'hook_wake_up') return 'green';
+      if (t === 'hook_post_turn') return 'cyan';
+      if (t.includes('reject')) return 'yellow';
+      if (t.includes('error') || t.includes('failed')) return 'red';
+      return 'grey';
     }
 
     // ── Bar component ─────────────────────────────────────────────────────────────
@@ -998,6 +1015,51 @@
             );
           })}
         </ul>
+      );
+    }
+
+    // ── ConsoleView ───────────────────────────────────────────────────────────────
+    function ConsoleView({ events }) {
+      const preRef = React.useRef(null);
+      const followingRef = React.useRef(true);
+      const [showFollowPill, setShowFollowPill] = React.useState(false);
+
+      React.useEffect(() => {
+        const pre = preRef.current;
+        if (!pre) return;
+        if (followingRef.current) pre.scrollTop = pre.scrollHeight;
+      }, [events]);
+
+      function onScroll() {
+        const pre = preRef.current;
+        if (!pre) return;
+        const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+        followingRef.current = atBottom;
+        setShowFollowPill(!atBottom);
+      }
+
+      function jumpToBottom() {
+        const pre = preRef.current;
+        if (!pre) return;
+        pre.scrollTop = pre.scrollHeight;
+        followingRef.current = true;
+        setShowFollowPill(false);
+      }
+
+      const newest100 = (events ?? []).slice(0, 100);
+      return (
+        <div className="console-wrap">
+          <pre ref={preRef} onScroll={onScroll}>
+            {newest100.map((e, i) => (
+              <span key={i} className={`console-line console-${classifyEvent(e.event_type)}`}>
+                {JSON.stringify(e)}{'\n'}
+              </span>
+            ))}
+          </pre>
+          {showFollowPill && (
+            <button className="follow-pill" onClick={jumpToBottom}>↓ follow</button>
+          )}
+        </div>
       );
     }
 

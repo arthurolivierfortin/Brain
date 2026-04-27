@@ -18,10 +18,23 @@
     html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; }
     #root {
       display: grid;
+      grid-template-columns: 280px 1fr 320px;
       grid-template-rows: auto 1fr 180px;
       height: 100vh;
     }
     .brain-shell { display: contents; }
+    .header-row { grid-column: 1 / -1; }
+    .footer-row { grid-column: 1 / -1; }
+    .left-placeholder {
+      background: rgba(255,255,255,0.01);
+      border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    .thought-stream {
+      border-left: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -79,7 +92,7 @@
       const total = stats?.total ?? 0;
 
       return (
-        <header style={{
+        <header className="header-row" style={{
           padding: "10px 16px",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           background: "rgba(255,255,255,0.02)",
@@ -127,7 +140,7 @@
     // ── Footer ─────────────────────────────────────────────────────────────────────
     function Footer({ events }) {
       return (
-        <footer style={{
+        <footer className="footer-row" style={{
           borderTop: "1px solid rgba(255,255,255,0.08)",
           overflowY: "auto",
           padding: "6px 12px",
@@ -271,11 +284,23 @@
       return state;
     }
 
+    // ── BrainGraph (stub — replaced by [SPEC-3]+) ─────────────────────────────────
+    function BrainGraph() {
+      return <div style={{ overflow: "hidden" }} />;
+    }
+
+    // ── ThoughtStream (stub — replaced by [SPEC-12]) ──────────────────────────────
+    function ThoughtStream() {
+      return <div className="thought-stream" />;
+    }
+
     // ── App ────────────────────────────────────────────────────────────────────────
     function App() {
       const startMs = useRef(Date.now()).current;
       const [docHidden, setDocHidden] = useState(document.hidden);
       const { tweaks, setTweaks } = useTweaks();
+      const [focus, setFocus] = useState(null);
+      const activatedAtRef = useRef({});
 
       useEffect(() => {
         const onVisibility = () => setDocHidden(document.hidden);
@@ -291,7 +316,18 @@
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
           <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} />
-          <main style={{ overflow: "hidden" }} />
+          <div className="left-placeholder" />
+          <BrainGraph
+            focus={focus}
+            setFocus={setFocus}
+            activatedAtRef={activatedAtRef}
+            paused={paused}
+          />
+          <ThoughtStream
+            events={[]}
+            focus={focus}
+            setFocus={setFocus}
+          />
           <Footer events={events} />
           <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} />
         </div>

@@ -60,6 +60,9 @@
     .console-line.console-red { color: var(--err); }
     .console-line.console-grey { color: var(--dim); }
     .follow-pill { position: absolute; top: 8px; right: 8px; background: var(--accent); color: var(--bg); border: none; padding: 2px 8px; cursor: pointer; font-family: inherit; font-size: 10px; }
+    .footer-search { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .footer-search input { background: #08090d; border: 1px solid #2a2f3d; color: var(--fg); padding: 2px 6px; font-family: inherit; font-size: 11px; min-width: 200px; outline: none; }
+    .footer-search .matches-badge { color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -173,14 +176,29 @@
     }
 
     // ── Footer ─────────────────────────────────────────────────────────────────────
-    function Footer({ events }) {
+    function Footer({ events, searchRef }) {
+      const [filter, setFilter] = React.useState('');
+      const filtered = filter === '' ? (events ?? []) : (events ?? []).filter(
+        e => JSON.stringify(e).toLowerCase().includes(filter.toLowerCase())
+      );
+
       return (
         <footer className="footer-row" style={{
           borderTop: "1px solid rgba(255,255,255,0.08)",
           overflowY: "auto",
-          padding: "6px 12px",
+          padding: "0",
         }}>
-          {(events ?? []).map((ev, i) => {
+          <div className="footer-search">
+            <input
+              type="search"
+              placeholder="filter…"
+              ref={searchRef}
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+            />
+            <span className="matches-badge">{filtered.length} / {(events ?? []).length} matches</span>
+          </div>
+          {filtered.map((ev, i) => {
             const type = ev.event_type ?? "";
             let badgeColor = "#555";
             if (type === "hook_wake_up") badgeColor = "var(--ok)";
@@ -190,7 +208,7 @@
 
             const details = (ev.details ?? "").slice(0, 120);
             return (
-              <div key={i} style={{ display: "flex", gap: "8px", padding: "2px 0", fontSize: "12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <div key={i} style={{ display: "flex", gap: "8px", padding: "2px 12px", fontSize: "12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 <span style={{ padding: "0 4px", borderRadius: "2px", background: badgeColor, color: "#000", flexShrink: 0, fontSize: "10px" }}>
                   {type}
                 </span>
@@ -1222,6 +1240,7 @@
       const setTab = React.useCallback(name => setTweaks(t => ({ ...t, tab: name })), [setTweaks]);
       const [focus, setFocus] = useState(null);
       const activatedAtRef = useRef({});
+      const footerSearchRef = useRef(null);
 
       useEffect(() => {
         const onVisibility = () => setDocHidden(document.hidden);
@@ -1271,7 +1290,7 @@
             focus={focus}
             setFocus={setFocus}
           />
-          <Footer events={events} />
+          <Footer events={events} searchRef={footerSearchRef} />
           <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} />
         </div>
       );

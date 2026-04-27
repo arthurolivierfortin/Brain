@@ -268,8 +268,7 @@
       return { tweaks, setTweaks };
     }
 
-    function TweaksPanel({ tweaks, setTweaks }) {
-      const [open, setOpen] = useState(false);
+    function TweaksPanel({ tweaks, setTweaks, open, setOpen }) {
       return (
         <div style={{ position: "fixed", bottom: "190px", right: "12px", zIndex: 100 }}>
           <button
@@ -1239,6 +1238,7 @@
       const { tweaks, setTweaks } = useTweaks(TWEAK_DEFAULTS);
       const setTab = React.useCallback(name => setTweaks(t => ({ ...t, tab: name })), [setTweaks]);
       const [focus, setFocus] = useState(null);
+      const [tweaksOpen, setTweaksOpen] = useState(false);
       const activatedAtRef = useRef({});
       const footerSearchRef = useRef(null);
 
@@ -1256,6 +1256,22 @@
       const thoughts = useThoughts(tweaks.speed, paused, nodeSet, activatedAtRef);
       const timeline = useTimeline();
       const lastError = statsError || eventsError;
+
+      useEffect(() => {
+        function onKey(e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.key === 'g') setTweaks(t => ({ ...t, tab: 'graph' }));
+          else if (e.key === 'm') setTweaks(t => ({ ...t, tab: 'matrix' }));
+          else if (e.key === 'c') setTweaks(t => ({ ...t, tab: 'console' }));
+          else if (e.key === ' ') { e.preventDefault(); setTweaks(t => ({ ...t, running: !t.running })); }
+          else if (e.key === 'r') { graph.refresh(); }
+          else if (e.key === 't') { setTweaksOpen(o => !o); }
+          else if (e.key === 'Escape') { setFocus(null); }
+          else if (e.key === '/') { e.preventDefault(); footerSearchRef.current?.focus(); }
+        }
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [graph.refresh, setTweaks, setTweaksOpen, setFocus]);
 
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
@@ -1291,7 +1307,7 @@
             setFocus={setFocus}
           />
           <Footer events={events} searchRef={footerSearchRef} />
-          <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} />
+          <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} open={tweaksOpen} setOpen={setTweaksOpen} />
         </div>
       );
     }

@@ -129,8 +129,8 @@ Money keeps its current embedded Brain running until the new one is mature and d
 - [ ] Bootstrap flow: how a new user seeds initial identity/preference memories (interactive CLI? web UI? auto-derive from CLAUDE.md?)
 - [ ] Adaptive token budget — L0/L1 allocated independently based on session type
 - [ ] Multi-platform adapters — Cursor, OpenAI Codex, Cline, etc. (one adapter module per platform, contract stays stable)
-- [ ] L2 topic-triggered retrieval (unblocked by `docs/improvements/` P2 "L0/L1/L2/L3 context layering")
-- [ ] L3 explicit deep semantic search API (Brain tool exposed via MCP)
+- [x] L2 topic-triggered retrieval — implemented in `WakeUpHandler` (cross-agent semantic search at `wake_up`, env-tunable threshold). See [ADR 0003](docs/decisions/0003-l2-l3-design.md).
+- [x] L3 explicit deep semantic search API — IS the existing `brain_search` MCP tool (model-invoked, cross-agent). See [ADR 0003](docs/decisions/0003-l2-l3-design.md).
 - [ ] Dynamic memory types in extractor output normalization (paired with `docs/improvements/` P0)
 - [ ] Extractor fallback chains (Flash down → Haiku → Ollama → raw blob)
 

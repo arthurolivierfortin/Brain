@@ -4,7 +4,7 @@
 
 ## Code
 
-- [ ] [SPEC-1] Extend `HookRequest` dataclass with three optional fields (`git_recent_commits: str = ""`, `git_branch: str = ""`, `claude_md_excerpt: str = ""`) defaulted to empty strings — `backend/src/brain/hook.py`
+- [x] [SPEC-1] Extend `HookRequest` dataclass with three optional fields (`git_recent_commits: str = ""`, `git_branch: str = ""`, `claude_md_excerpt: str = ""`) defaulted to empty strings — `backend/src/brain/hook.py`
 - [ ] [SPEC-2] Refactor `BrainStore.search_by_tag(tag, agent, top_k)` so `agent` becomes `agent: str | None = None`; when `None`, drop the `where={"agent": ...}` clause and read all agents — `backend/src/brain/store.py`
 - [ ] [SPEC-3] Add `_build_topic_query(req: HookRequest) -> str` to `WakeUpHandler` returning the labeled-concat format from spec; returns `""` if all three optional fields are empty — `backend/src/brain/hook.py`
 - [ ] [SPEC-4] Add `_apply_threshold(candidates: list[dict], threshold: float) -> list[dict]` filtering on `cosine_similarity = 1 - distance/2 > threshold`; preserves input order — `backend/src/brain/hook.py`

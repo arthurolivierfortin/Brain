@@ -939,3 +939,14 @@ class TestSearchByTag:
         store.store("content", agent="t", memory_type="context",
                     metadata={"tags": "bug"}, skip_gate=True)
         assert store.search_by_tag("identity", agent="t") == []
+
+    def test_search_by_tag_cross_agent_when_agent_is_none(self, tmp_path: Path):
+        store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
+        store.store("identity A", agent="agent-a", memory_type="context",
+                    metadata={"tags": "identity"}, skip_gate=True)
+        store.store("identity B", agent="agent-b", memory_type="context",
+                    metadata={"tags": "identity"}, skip_gate=True)
+        results = store.search_by_tag("identity", agent=None, top_k=10)
+        contents = [r["content"] for r in results]
+        assert "identity A" in contents
+        assert "identity B" in contents

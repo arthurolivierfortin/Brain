@@ -40,6 +40,9 @@ class WakeUpResponse:
     layers_loaded: dict[str, int]
     tokens_approx: int
     duration_ms: int
+    identity: list[dict] = field(default_factory=list)
+    prefs: list[dict] = field(default_factory=list)
+    topic: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -211,38 +214,101 @@ class GeminiFlashExtractor:
 
 
 class WakeUpHandler:
-    """Selects L0 + L1 memories and formats them as a system-prompt injection."""
+    """Selects L0 + L1 + L2 memories and formats them as a system-prompt injection.
+
+    L0 = identity tag (cross-agent, cap 100 tokens)
+    L1 = preference tag (cross-agent, cap 300 tokens)
+    L2 = topic-triggered semantic search (cross-agent, cap 500 tokens)
+
+    See docs/specs/2026-04-28-l2-a-backend-design.md and ADR 0003.
+    """
 
     L0_TAG = "identity"
     L1_TAG = "preference"
+    L0_CAP = 100
+    L1_CAP = 300
+    L2_CAP = 500
     BUDGET_TOKENS = 500
 
-    def __init__(self, store: Any) -> None:
+    def __init__(self, store: Any, events: Any = None) -> None:
         self._store = store
+        self._events = events
+        self._threshold = float(os.environ.get("BRAIN_L2_THRESHOLD", "0.45"))
+        self._topk_raw = int(os.environ.get("BRAIN_L2_TOPK_RAW", "20"))
 
     def handle(self, req: HookRequest) -> WakeUpResponse:
         t0 = time.monotonic()
-        identity = self._store.search_by_tag(self.L0_TAG, agent=req.agent, top_k=5)
-        prefs = self._store.search_by_tag(self.L1_TAG, agent=req.agent, top_k=10)
 
-        context = self._format(identity, prefs)
-        while self._tokens(context) > self.BUDGET_TOKENS and (identity or prefs):
-            if prefs:
-                prefs.pop()
-            else:
-                identity.pop()
-            context = self._format(identity, prefs)
+        try:
+            identity = self._store.search_by_tag(self.L0_TAG, agent=None, top_k=5)
+            identity = _fit_to_budget(identity, self.L0_CAP)
+        except Exception:
+            identity = []
+            if self._events is not None:
+                _log_degraded(self._events, req, reason="l0_failed", layer_affected="L0")
 
+        try:
+            prefs = self._store.search_by_tag(self.L1_TAG, agent=None, top_k=10)
+            prefs = _fit_to_budget(prefs, self.L1_CAP)
+        except Exception:
+            prefs = []
+            if self._events is not None:
+                _log_degraded(self._events, req, reason="l1_failed", layer_affected="L1")
+
+        topic: list[dict] = []
+        topic_query = _build_topic_query(req)
+        if topic_query:
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    future = ex.submit(
+                        lambda: self._store.search(
+                            topic_query, agent=None, top_k=self._topk_raw,
+                        )
+                    )
+                    try:
+                        candidates = future.result(timeout=BRAIN_L2_TIMEOUT_S)
+                    except concurrent.futures.TimeoutError:
+                        if self._events is not None:
+                            _log_degraded(
+                                self._events, req,
+                                reason="db_timeout", layer_affected="L2",
+                            )
+                        candidates = None
+                if candidates is not None:
+                    filtered = _apply_threshold(candidates, self._threshold)
+                    reranked = _rerank_candidates(filtered)
+                    topic = _fit_to_budget(reranked, self.L2_CAP)
+            except Exception:
+                if self._events is not None:
+                    _log_degraded(
+                        self._events, req,
+                        reason="embedding_failed", layer_affected="L2",
+                    )
+
+        context = self._format(identity, prefs, topic)
         duration_ms = int((time.monotonic() - t0) * 1000)
+        layers_loaded = {
+            "L0": len(identity),
+            "L1": len(prefs),
+            "L2": len(topic),
+        }
         return WakeUpResponse(
             context=context,
-            layers_loaded={"L0": len(identity), "L1": len(prefs)},
+            layers_loaded=layers_loaded,
             tokens_approx=self._tokens(context),
             duration_ms=duration_ms,
+            identity=identity,
+            prefs=prefs,
+            topic=topic,
         )
 
     @staticmethod
-    def _format(identity: list[dict], prefs: list[dict]) -> str:
+    def _format(
+        identity: list[dict],
+        prefs: list[dict],
+        topic: list[dict] | None = None,
+    ) -> str:
+        topic = topic or []
         lines: list[str] = []
         if identity:
             lines.append("## Identity")
@@ -253,6 +319,12 @@ class WakeUpHandler:
                 lines.append("")
             lines.append("## Preferences")
             for m in prefs:
+                lines.append(f"- {m['content']}")
+        if topic:
+            if identity or prefs:
+                lines.append("")
+            lines.append("## Topic")
+            for m in topic:
                 lines.append(f"- {m['content']}")
         return "\n".join(lines)
 

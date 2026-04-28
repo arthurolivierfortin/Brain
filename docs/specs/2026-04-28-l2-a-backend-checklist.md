@@ -5,7 +5,7 @@
 ## Code
 
 - [x] [SPEC-1] Extend `HookRequest` dataclass with three optional fields (`git_recent_commits: str = ""`, `git_branch: str = ""`, `claude_md_excerpt: str = ""`) defaulted to empty strings — `backend/src/brain/hook.py`
-- [ ] [SPEC-2] Refactor `BrainStore.search_by_tag(tag, agent, top_k)` so `agent` becomes `agent: str | None = None`; when `None`, drop the `where={"agent": ...}` clause and read all agents — `backend/src/brain/store.py`
+- [x] [SPEC-2] Refactor `BrainStore.search_by_tag(tag, agent, top_k)` so `agent` becomes `agent: str | None = None`; when `None`, drop the `where={"agent": ...}` clause and read all agents — `backend/src/brain/store.py`
 - [ ] [SPEC-3] Add `_build_topic_query(req: HookRequest) -> str` to `WakeUpHandler` returning the labeled-concat format from spec; returns `""` if all three optional fields are empty — `backend/src/brain/hook.py`
 - [ ] [SPEC-4] Add `_apply_threshold(candidates: list[dict], threshold: float) -> list[dict]` filtering on `cosine_similarity = 1 - distance/2 > threshold`; preserves input order — `backend/src/brain/hook.py`
 - [ ] [SPEC-5] Add `_rerank_candidates(candidates: list[dict]) -> list[dict]` implementing `score = cosine × (1 + log(access+1) × 0.05) × exp(-age_days × 0.01)`, with `_age_days(iso_ts, now)` helper that returns 0 on parse failure; sort descending by score — `backend/src/brain/hook.py`

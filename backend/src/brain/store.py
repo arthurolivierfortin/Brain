@@ -732,19 +732,26 @@ class BrainStore:
 
         return related
 
-    def search_by_tag(self, tag: str, agent: str, top_k: int = 5) -> list[dict]:
-        """Return memories whose tags contain `tag`, scoped to agent, ordered by access_count desc.
+    def search_by_tag(self, tag: str, agent: str | None = None, top_k: int = 5) -> list[dict]:
+        """Return memories whose tags contain `tag`, ordered by access_count desc.
 
-        Used by the hook `wake_up` handler to fetch L0 (identity) and L1 (preference)
-        memories. Substring matching on tags enables namespacing (identity-core matches
-        identity). See docs/specs/2026-04-19-hook-architecture-design.md.
+        When `agent` is None, reads across all agents (Brain-level access control —
+        L0/L1/L2 wake_up retrieval is cross-agent by design; see ADR 0003).
+        When `agent` is a string, scopes the read to that agent.
+        Substring matching on tags enables namespacing (identity-core matches identity).
+        See docs/specs/2026-04-19-hook-architecture-design.md.
         """
         if self._collection.count() == 0:
             return []
-        results = self._collection.get(
-            where={"agent": {"$eq": agent}},
-            include=["documents", "metadatas"],
-        )
+        if agent is not None:
+            results = self._collection.get(
+                where={"agent": {"$eq": agent}},
+                include=["documents", "metadatas"],
+            )
+        else:
+            results = self._collection.get(
+                include=["documents", "metadatas"],
+            )
         ids = results.get("ids") or []
         docs = results.get("documents") or []
         metas = results.get("metadatas") or []

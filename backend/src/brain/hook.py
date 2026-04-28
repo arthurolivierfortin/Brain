@@ -4,11 +4,14 @@ See docs/specs/2026-04-19-hook-architecture-design.md.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import math
 import os
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Protocol
 
 import httpx
@@ -53,6 +56,76 @@ class PostTurnResponse:
     rejected_by_gate: int
     extraction_cost_usd: float
     extraction_ms: int
+
+
+BRAIN_L2_TIMEOUT_S: float = 2.0
+
+
+def _build_topic_query(req: HookRequest) -> str:
+    parts: list[str] = []
+    if req.git_branch:
+        parts.append(f"branch: {req.git_branch}")
+    if req.git_recent_commits:
+        parts.append(f"recent commits:\n{req.git_recent_commits}")
+    if req.claude_md_excerpt:
+        parts.append(req.claude_md_excerpt)
+    return "\n\n".join(parts).strip()
+
+
+def _apply_threshold(candidates: list[dict], threshold: float) -> list[dict]:
+    return [c for c in candidates if (1.0 - c["distance"] / 2.0) > threshold]
+
+
+def _age_days(iso_ts: str, now: float) -> float:
+    try:
+        dt = datetime.fromisoformat(iso_ts)
+        return max((now - dt.timestamp()) / 86400, 0.0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _rerank_candidates(candidates: list[dict]) -> list[dict]:
+    now = time.time()
+    for c in candidates:
+        cosine = 1.0 - c["distance"] / 2.0
+        access = int(c.get("access_count", 0))
+        age = _age_days(c.get("created_at", ""), now)
+        c["_rerank_score"] = (
+            cosine * (1.0 + math.log(access + 1) * 0.05) * math.exp(-age * 0.01)
+        )
+    return sorted(candidates, key=lambda x: x["_rerank_score"], reverse=True)
+
+
+def _fit_to_budget(memories: list[dict], cap: int) -> list[dict]:
+    out: list[dict] = []
+    total = 0
+    for m in memories:
+        cost = len(m["content"]) // 4
+        if total + cost > cap:
+            break
+        out.append(m)
+        total += cost
+    return out
+
+
+def _log_degraded(
+    events: Any,
+    req: HookRequest,
+    reason: str,
+    layer_affected: str,
+    fallback_used: str = "",
+) -> None:
+    events.log(
+        event_type="degraded_wake_up",
+        agent=req.agent,
+        metadata={
+            "reason": reason,
+            "layer_affected": layer_affected,
+            "fallback_used": fallback_used,
+            "agent": req.agent,
+            "session_id": req.session_id,
+        },
+    )
 
 
 class Extractor(Protocol):

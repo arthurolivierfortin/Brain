@@ -94,6 +94,51 @@ def test_post_turn_missing_agent_returns_400(tmp_path: Path):
         srv.shutdown()
 
 
+def test_wake_up_accepts_topic_fields_and_enriches_event_metadata(tmp_path: Path):
+    import json
+
+    events_path = tmp_path / "events.jsonl"
+    from brain import events as events_module
+    original_default = events_module.DEFAULT_LOG_PATH
+    events_module.DEFAULT_LOG_PATH = events_path
+
+    srv, url = _start_server(tmp_path)
+    try:
+        resp = httpx.post(f"{url}/hook/wake_up", json={
+            "agent": "test-agent",
+            "project": "/brain",
+            "session_id": "s-http-1",
+            "git_branch": "feat/25-l2-backend",
+            "git_recent_commits": "add L2 topic retrieval to wake_up",
+            "claude_md_excerpt": "Python FastAPI backend",
+        })
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "context" in body
+        assert "layers_loaded" in body
+        assert set(body["layers_loaded"].keys()) == {"L0", "L1", "L2"}
+        assert "tokens_approx" in body
+        assert "duration_ms" in body
+
+        logged_lines = events_path.read_text().splitlines() if events_path.exists() else []
+        wake_events = [
+            json.loads(line) for line in logged_lines
+            if line and json.loads(line).get("event_type") == "hook_wake_up"
+        ]
+        assert len(wake_events) >= 1
+        meta = wake_events[-1]["metadata"]
+        assert "memory_ids" in meta
+        assert set(meta["memory_ids"].keys()) == {"L0", "L1", "L2"}
+        assert "cosine_scores" in meta
+        assert isinstance(meta["cosine_scores"], list)
+        assert "threshold_applied" in meta
+        assert "tokens_per_layer" in meta
+        assert set(meta["tokens_per_layer"].keys()) == {"L0", "L1", "L2"}
+    finally:
+        srv.shutdown()
+        events_module.DEFAULT_LOG_PATH = original_default
+
+
 def test_post_turn_without_api_key_returns_503(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     srv, url = _start_server(tmp_path, api_key="")

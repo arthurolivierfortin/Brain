@@ -26,6 +26,9 @@ class HookRequest:
     agent: str
     project: str
     session_id: str
+    git_recent_commits: str = ""
+    git_branch: str = ""
+    claude_md_excerpt: str = ""
 
 
 @dataclass

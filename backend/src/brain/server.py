@@ -320,6 +320,7 @@ def create_http_app():
                     logger.error("Consolidation failed: %s", e)
                     self._json_response({"error": str(e)}, status=500)
             elif self.path == "/hook/wake_up":
+                import os
                 from brain.hook import HookRequest, WakeUpHandler
                 agent = data.get("agent", "")
                 if not agent:
@@ -331,9 +332,16 @@ def create_http_app():
                     agent=agent,
                     project=data.get("project", ""),
                     session_id=data.get("session_id", ""),
+                    git_recent_commits=data.get("git_recent_commits", ""),
+                    git_branch=data.get("git_branch", ""),
+                    claude_md_excerpt=data.get("claude_md_excerpt", ""),
                 )
-                handler = WakeUpHandler(store)
+                handler = WakeUpHandler(store, events)
                 r = handler.handle(req)
+                threshold = float(os.environ.get("BRAIN_L2_THRESHOLD", "0.45"))
+                cosine_scores = [
+                    round(1.0 - m["distance"] / 2.0, 4) for m in r.topic
+                ]
                 events.log(
                     event_type="hook_wake_up",
                     agent=req.agent,
@@ -341,6 +349,18 @@ def create_http_app():
                         "tokens_approx": r.tokens_approx,
                         "layers_loaded": r.layers_loaded,
                         "duration_ms": r.duration_ms,
+                        "memory_ids": {
+                            "L0": [m["id"] for m in r.identity],
+                            "L1": [m["id"] for m in r.prefs],
+                            "L2": [m["id"] for m in r.topic],
+                        },
+                        "cosine_scores": cosine_scores,
+                        "threshold_applied": threshold,
+                        "tokens_per_layer": {
+                            "L0": sum(len(m["content"]) // 4 for m in r.identity),
+                            "L1": sum(len(m["content"]) // 4 for m in r.prefs),
+                            "L2": sum(len(m["content"]) // 4 for m in r.topic),
+                        },
                     },
                 )
                 self._json_response({

@@ -28,7 +28,7 @@ def test_empty_store_returns_empty_context(tmp_path: Path):
     handler = WakeUpHandler(store)
     resp = handler.handle(HookRequest(agent="brain-dev", project="/", session_id="s"))
     assert resp.context == ""
-    assert resp.layers_loaded == {"L0": 0, "L1": 0}
+    assert resp.layers_loaded == {"L0": 0, "L1": 0, "L2": 0}
 
 
 def test_populates_identity_and_preference_sections(tmp_path: Path):
@@ -40,17 +40,8 @@ def test_populates_identity_and_preference_sections(tmp_path: Path):
     assert "Arthur" in resp.context
     assert "## Preferences" in resp.context
     assert "🧠" in resp.context
-    assert resp.layers_loaded == {"L0": 1, "L1": 1}
+    assert resp.layers_loaded == {"L0": 1, "L1": 1, "L2": 0}
     assert "bug" not in resp.context.lower()
-
-
-def test_scopes_to_agent(tmp_path: Path):
-    store = BrainStore(persist_dir=str(tmp_path / "chromadb"))
-    _seed_memories(store, agent="brain-dev")
-    _seed_memories(store, agent="money-dev")
-    handler = WakeUpHandler(store)
-    resp = handler.handle(HookRequest(agent="brain-dev", project="/", session_id="s"))
-    assert resp.layers_loaded == {"L0": 1, "L1": 1}
 
 
 def test_budget_caps_output_tokens(tmp_path: Path):

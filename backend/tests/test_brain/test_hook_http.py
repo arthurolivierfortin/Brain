@@ -40,7 +40,7 @@ def test_wake_up_returns_empty_context_for_fresh_brain(tmp_path: Path):
         assert resp.status_code == 200
         body = resp.json()
         assert body["context"] == ""
-        assert body["layers_loaded"] == {"L0": 0, "L1": 0}
+        assert body["layers_loaded"] == {"L0": 0, "L1": 0, "L2": 0}
     finally:
         srv.shutdown()
 

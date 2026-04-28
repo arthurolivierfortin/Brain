@@ -446,3 +446,12 @@ Deferred items (bootstrap flow, other hooks, L2/L3, multi-platform) stay uncheck
 - `scripts/brain_hook.py` — legacy Stop hook being superseded
 - `.claude/settings.json` — current hook wiring
 - `backend/src/brain/store.py` — `RESERVED_META_KEYS` (from fix #1), gate integration point
+
+---
+
+## Update 2026-04-28
+
+"L2 topic-triggered retrieval" and "L3 deep semantic search" moved from Out-of-scope to In-scope.
+
+- **L2** implemented in `backend/src/brain/hook.py:WakeUpHandler` — topic-triggered semantic retrieval at `wake_up`. See [2026-04-28-l2-a-backend-design.md](2026-04-28-l2-a-backend-design.md) and [ADR 0003](../decisions/0003-l2-l3-design.md).
+- **L3** clarified: `brain_search` MCP tool already implements L3 (explicit model-invoked deep semantic search). No new code. See [ADR 0003](../decisions/0003-l2-l3-design.md).

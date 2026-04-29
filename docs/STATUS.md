@@ -14,14 +14,25 @@ Brain monitor (3 PRs, 3 phases) shipped 2026-04-27:
 - [x] Phase 2 — graph viz + thought stream (#17, PR #21)
 - [x] Phase 3 — left panel + tabs + polish (#18, PR #22)
 
+L2/L3 layering shipped 2026-04-28:
+- [x] L2-A backend (#25, PR #27) — WakeUpHandler refactor + topic-triggered retrieval + cross-agent + reranking + degraded_wake_up observability + ADR 0003
+- [x] L2-B adapter (#26, PR #28) — `scripts/brain_wake_up.py` collects git + CLAUDE.md, sends in payload
+- [x] L3 = `brain_search` MCP tool (already existed; clarified in README + ADR 0003)
+
+Brain monitor fidelity pass shipped 2026-04-28:
+- [x] Monitor fidelity (#30, PR #31) — htop tabs in header, agent dropdown, L2 badge, layer rings on graph nodes, animation system, memory_type co-occurrence matrix, hash router (#/memory/, #/hook/, #/agent/), drawer inspectors with j/k navigation
+
 Remaining deliverables for phase 2b:
-- [ ] Dogfood hook architecture + monitor on Brain sessions for ≥7 days, verify cerveau-parfait effect (open `http://localhost:8621/monitor` while Brain runs)
+- [ ] Dogfood hook architecture + monitor on Brain sessions for ≥7 days, verify cerveau-parfait effect (open `http://localhost:8621/monitor` while Brain runs — requires Docker rebuild after each merge)
 
 All other phase 2b deliverables checked off in README.md.
 
 ## Known follow-ups (post-2b)
 
-- MatrixView cell-overlay positioning bug at `backend/src/brain/static/brain.html` ~L1153 (double-counts `LABEL_GUTTER`; cosmetic, ~80px offset). Open as ad-hoc P:low if confirmed during dogfood.
+- MatrixView cell-overlay positioning bug at brain.html ~L1153 (Phase 3 cosmetic, ~80px offset). Possibly fixed by the monitor fidelity refactor — verify in dogfood.
+- L2 threshold (`BRAIN_L2_THRESHOLD`, default 0.45) needs dogfood-period calibration — adjust if too few/too many memories surface.
+- queue_log.jsonl persistence deferred (HEALTH sparkline currently in-memory only) — open ad-hoc issue if dogfood reveals a need.
+- Phase 4 Next.js rewrite (frontend/) lands the typed version of brain.html with Playwright tests — current static + Babel-in-browser is the dogfood artifact.
 
 ## Phase pipeline (next)
 

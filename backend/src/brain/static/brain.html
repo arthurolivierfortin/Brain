@@ -1689,6 +1689,79 @@
       );
     }
 
+    // ── AgentProfile ──────────────────────────────────────────────────────────────
+    function AgentProfile({ name }) {
+      const { nodes } = useGraph();
+      const { events } = useEvents(1, false);
+
+      const created = (nodes ?? []).filter(n => n.agent === name);
+
+      const loadedIds = new Set();
+      for (const ev of events ?? []) {
+        if (ev.agent !== name || ev.event_type !== 'hook_wake_up') continue;
+        for (const ids of Object.values(ev.metadata?.memory_ids ?? {})) {
+          for (const id of ids) loadedIds.add(id);
+        }
+      }
+      const loaded = (nodes ?? []).filter(n => loadedIds.has(n.id));
+      const timeline = (events ?? []).filter(e => e.agent === name).slice(0, 50);
+
+      return (
+        <div className="inspector">
+          <h3>{name}</h3>
+
+          <div className="inspector-section">
+            <h4>created memories ({created.length})</h4>
+            {created.length === 0 && <span style={{ opacity: 0.5 }}>none</span>}
+            {created.map(n => (
+              <span
+                key={n.id}
+                className="inspector-link"
+                onClick={() => { window.location.hash = '#/memory/' + n.id; }}
+              >
+                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: n.color, marginRight: '6px' }} />
+                {(n.content ?? n.id).slice(0, 60)}
+              </span>
+            ))}
+          </div>
+
+          <div className="inspector-section">
+            <h4>loaded memories ({loaded.length})</h4>
+            {loaded.length === 0 && <span style={{ opacity: 0.5 }}>none</span>}
+            {loaded.map(n => (
+              <span
+                key={n.id}
+                className="inspector-link"
+                onClick={() => { window.location.hash = '#/memory/' + n.id; }}
+              >
+                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: n.color, marginRight: '6px' }} />
+                {(n.content ?? n.id).slice(0, 60)}
+              </span>
+            ))}
+          </div>
+
+          <div className="inspector-section">
+            <h4>recent activity ({timeline.length})</h4>
+            {timeline.map((ev, i) => {
+              const isHook = ev.event_type?.startsWith('hook_');
+              return (
+                <span
+                  key={i}
+                  className={isHook ? 'inspector-link' : ''}
+                  style={{ display: 'block', padding: '1px 0', fontSize: '10px', cursor: isHook ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (isHook && ev.event_id) window.location.hash = '#/hook/' + ev.event_id;
+                  }}
+                >
+                  [{formatTime(ev.timestamp)}] {(ev.event_type ?? '').padEnd(20)} · {(ev.details ?? '').slice(0, 40)}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     // ── HashRouter ────────────────────────────────────────────────────────────────
     function parseHash(hash) {
       let m;

@@ -1,10 +1,20 @@
 """Tests for L2-B enrichment helpers in brain_wake_up.py."""
 from __future__ import annotations
 
+import http.server
+import json
+import os
+import socket
 import subprocess
+import sys
+import threading
+from pathlib import Path
 from unittest.mock import patch
 
 import brain_wake_up as hook
+
+SCRIPTS_DIR = Path(__file__).parent.parent
+SCRIPT_PATH = str(SCRIPTS_DIR / "brain_wake_up.py")
 
 
 # ---------------------------------------------------------------------------
@@ -89,3 +99,93 @@ def test_collect_claude_md_reads_truncates_and_falls_back(tmp_path):
     empty_dir.mkdir()
     result_c = hook._collect_claude_md(str(empty_dir), git_root=str(empty_dir))
     assert result_c is None
+
+
+# ---------------------------------------------------------------------------
+# Captor HTTP server used by integration tests [TEST-6] and [TEST-7]
+# ---------------------------------------------------------------------------
+class _CaptorHandler(http.server.BaseHTTPRequestHandler):
+    captured: list[dict] = []
+
+    def do_POST(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        _CaptorHandler.captured.append(json.loads(body))
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"context": ""}')
+
+    def log_message(self, *args):
+        pass
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _git_subprocess_env() -> dict[str, str]:
+    return {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "T",
+        "GIT_AUTHOR_EMAIL": "t@test.com",
+        "GIT_COMMITTER_NAME": "T",
+        "GIT_COMMITTER_EMAIL": "t@test.com",
+    }
+
+
+# ---------------------------------------------------------------------------
+# [TEST-6] Integration: subprocess sends enriched payload when git repo + CLAUDE.md present
+# ---------------------------------------------------------------------------
+def test_subprocess_sends_enriched_payload_when_git_and_claudemd_present(tmp_path):
+    git_dir = tmp_path / "repo"
+    git_dir.mkdir()
+    (git_dir / "README.md").write_text("hello", encoding="utf-8")
+    (git_dir / "CLAUDE.md").write_text("x" * 1500, encoding="utf-8")
+
+    git_env = _git_subprocess_env()
+    subprocess.run(["git", "init"], cwd=str(git_dir), check=True,
+                   capture_output=True, env=git_env)
+    subprocess.run(["git", "config", "user.email", "t@test.com"], cwd=str(git_dir),
+                   check=True, capture_output=True, env=git_env)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=str(git_dir),
+                   check=True, capture_output=True, env=git_env)
+    subprocess.run(["git", "add", "."], cwd=str(git_dir), check=True,
+                   capture_output=True, env=git_env)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=str(git_dir), check=True,
+                   capture_output=True, env=git_env)
+
+    port = _free_port()
+    _CaptorHandler.captured = []
+    server = http.server.HTTPServer(("127.0.0.1", port), _CaptorHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        env = {**os.environ, "BRAIN_URL": f"http://127.0.0.1:{port}"}
+        stdin_payload = json.dumps({"cwd": str(git_dir), "session_id": "s1"})
+
+        subprocess.run(
+            [sys.executable, SCRIPT_PATH],
+            input=stdin_payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+    finally:
+        server.shutdown()
+
+    assert len(_CaptorHandler.captured) == 1
+    body = _CaptorHandler.captured[0]
+
+    assert "git_branch" in body, f"git_branch missing from payload: {body}"
+    assert isinstance(body["git_branch"], str)
+
+    assert "git_recent_commits" in body, f"git_recent_commits missing from payload: {body}"
+    assert len(body["git_recent_commits"].encode("utf-8")) <= 600
+
+    assert "claude_md_excerpt" in body, f"claude_md_excerpt missing from payload: {body}"
+    assert len(body["claude_md_excerpt"]) == 1000

@@ -1197,8 +1197,8 @@
       );
     }
 
-    // ── MatrixView ────────────────────────────────────────────────────────────────
-    function MatrixView({ entries }) {
+    // ── AgentTypeMatrix ───────────────────────────────────────────────────────────
+    function AgentTypeMatrix({ entries }) {
       const [selected, setSelected] = React.useState(null);
       const wrapRef = React.useRef(null);
       const [svgSize, setSvgSize] = React.useState({ w: 600, h: 400 });
@@ -1308,6 +1308,144 @@
               style={{ left: selected.x + LABEL_GUTTER, top: selected.y + TOP_GUTTER }}
             >
               {selected.agent} × {selected.type}{'\n'}count: {selected.count}{'\n'}samples: {selected.sampleIds.join(', ')}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── MemoryTypeCooccurrence ────────────────────────────────────────────────────
+    function MemoryTypeCooccurrence({ entries }) {
+      const [selected, setSelected] = React.useState(null);
+      const wrapRef = React.useRef(null);
+      const [svgSize, setSvgSize] = React.useState({ w: 600, h: 400 });
+
+      React.useEffect(() => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => setSvgSize({ w: el.clientWidth || 600, h: el.clientHeight || 400 }));
+        ro.observe(el);
+        setSvgSize({ w: el.clientWidth || 600, h: el.clientHeight || 400 });
+        return () => ro.disconnect();
+      }, []);
+
+      const { types, matrix, samples, maxCount } = React.useMemo(() => {
+        const typeSet = new Set();
+        const nodeById = new Map((entries ?? []).map(e => [e.id, e]));
+        const matrix = {};
+        const samples = {};
+        let maxCount = 0;
+
+        for (const e of entries ?? []) {
+          const mt = e.memory_type || 'default';
+          typeSet.add(mt);
+          const linkIds = e.links ? e.links.split(',').map(s => s.trim()).filter(Boolean) : [];
+          for (const lid of linkIds) {
+            const linked = nodeById.get(lid);
+            if (!linked) continue;
+            const lmt = linked.memory_type || 'default';
+            typeSet.add(lmt);
+            matrix[mt] = matrix[mt] ?? {};
+            matrix[mt][lmt] = (matrix[mt][lmt] ?? 0) + 1;
+            matrix[lmt] = matrix[lmt] ?? {};
+            matrix[lmt][mt] = (matrix[lmt][mt] ?? 0) + 1;
+            if (matrix[mt][lmt] > maxCount) maxCount = matrix[mt][lmt];
+
+            const k = mt + '\x00' + lmt;
+            samples[k] = samples[k] ?? [];
+            if (samples[k].length < 5) samples[k].push(e.id);
+          }
+        }
+        return { types: [...typeSet], matrix, samples, maxCount };
+      }, [entries]);
+
+      function cellAlpha(count) {
+        if (!count) return 0;
+        return Math.max(0.1, Math.log(count + 1) / Math.log(maxCount + 1));
+      }
+
+      function truncLabel(label) {
+        return label.length > 12 ? label.slice(0, 11) + '…' : label;
+      }
+
+      const LABEL_GUTTER = 80;
+      const TOP_GUTTER = 40;
+      const cellW = types.length > 0 ? (svgSize.w - LABEL_GUTTER) / types.length : 0;
+      const cellH = types.length > 0 ? (svgSize.h - TOP_GUTTER) / types.length : 0;
+
+      return (
+        <div ref={wrapRef} className="matrix-view">
+          <svg
+            width={svgSize.w}
+            height={svgSize.h}
+            onClick={e => { if (e.target.tagName === 'svg' || e.target.tagName === 'SVG') setSelected(null); }}
+          >
+            {types.map((type, ti) => (
+              <text
+                key={`col-${type}`}
+                x={LABEL_GUTTER + ti * cellW + cellW / 2}
+                y={TOP_GUTTER - 6}
+                textAnchor="middle"
+                fontSize="9"
+                fill="var(--dim)"
+              >
+                {truncLabel(type)}
+              </text>
+            ))}
+            {types.map((type, ti) => (
+              <text
+                key={`row-${type}`}
+                x={LABEL_GUTTER - 4}
+                y={TOP_GUTTER + ti * cellH + cellH / 2 + 4}
+                textAnchor="end"
+                fontSize="9"
+                fill="var(--dim)"
+              >
+                {truncLabel(type)}
+              </text>
+            ))}
+            {types.map((rowType, ri) =>
+              types.map((colType, ci) => {
+                const count = matrix[rowType]?.[colType] ?? 0;
+                const alpha = cellAlpha(count);
+                const k = rowType + '\x00' + colType;
+                const sampleIds = samples[k] ?? [];
+                const x = LABEL_GUTTER + ci * cellW;
+                const y = TOP_GUTTER + ri * cellH;
+                return (
+                  <rect
+                    key={k}
+                    x={x}
+                    y={y}
+                    width={Math.max(1, cellW - 2)}
+                    height={Math.max(1, cellH - 2)}
+                    fill={`hsla(280, 60%, 50%, ${alpha})`}
+                    style={{ cursor: count > 0 ? 'pointer' : 'default' }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (count === 0) return;
+                      setSelected({ rowType, colType, count, sampleIds, x, y });
+                    }}
+                  />
+                );
+              })
+            )}
+          </svg>
+          {selected && (
+            <div
+              className="cell-overlay"
+              style={{ left: selected.x + LABEL_GUTTER, top: selected.y + TOP_GUTTER, pointerEvents: 'auto' }}
+            >
+              {selected.rowType} × {selected.colType}{'\n'}count: {selected.count}{'\n'}
+              {selected.sampleIds.map(id => (
+                <span
+                  key={id}
+                  style={{ cursor: 'pointer', color: 'var(--accent)', display: 'block' }}
+                  onClick={() => { window.location.hash = '#/memory/' + id; }}
+                >
+                  {id.slice(0, 16)}…
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -1481,7 +1619,29 @@
                   animationsEnabled={tweaks.animations !== false}
                 />
               )}
-              {tweaks.tab === 'matrix' && <MatrixView entries={graph.nodes} />}
+              {tweaks.tab === 'matrix' && (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div className="tab-bar" style={{ flexShrink: 0 }}>
+                    <button
+                      className={tweaks.matrixSubview !== 'agents' ? 'active' : ''}
+                      onClick={() => setTweaks(t => ({ ...t, matrixSubview: 'types' }))}
+                    >
+                      view: types
+                    </button>
+                    <button
+                      className={tweaks.matrixSubview === 'agents' ? 'active' : ''}
+                      onClick={() => setTweaks(t => ({ ...t, matrixSubview: 'agents' }))}
+                    >
+                      view: agents
+                    </button>
+                  </div>
+                  <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                    {tweaks.matrixSubview === 'agents'
+                      ? <AgentTypeMatrix entries={graph.nodes} />
+                      : <MemoryTypeCooccurrence entries={graph.nodes} />}
+                  </div>
+                </div>
+              )}
               {tweaks.tab === 'console' && <ConsoleView events={events} />}
             </div>
           </div>

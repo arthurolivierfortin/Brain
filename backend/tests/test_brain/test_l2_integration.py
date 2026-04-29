@@ -11,7 +11,6 @@ from brain.events import EventLog  # noqa: E402
 from brain.hook import HookRequest, WakeUpHandler  # noqa: E402
 from brain.store import BrainStore  # noqa: E402
 
-
 _FIXTURE_MEMORIES = [
     ("FastAPI route testing with pytest and httpx", "backend"),
     ("SQLite WAL mode enables concurrent readers", "backend"),

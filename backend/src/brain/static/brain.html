@@ -13,6 +13,7 @@
       --ok: #a3be8c;
       --err: #bf616a;
       --dim: #5d6478;
+      --l2: #c278d6;
       --font: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -95,6 +96,43 @@
       if (t.includes('reject')) return 'yellow';
       if (t.includes('error') || t.includes('failed')) return 'red';
       return 'grey';
+    }
+
+    // ── Layer helpers ─────────────────────────────────────────────────────────────
+    function tagToLayer(tags) {
+      const parts = (tags ?? '').split(',').map(s => s.trim());
+      if (parts.includes('identity')) return 'L0';
+      if (parts.includes('preference')) return 'L1';
+      return null;
+    }
+
+    function inferLayer(node, l2RecentsMap) {
+      if (l2RecentsMap && l2RecentsMap.has(node.id) && l2RecentsMap.get(node.id) > Date.now()) {
+        return 'L2';
+      }
+      return tagToLayer(node.tags ?? '');
+    }
+
+    function layerRingColor(layer) {
+      if (layer === 'L0') return '#dec56f';
+      if (layer === 'L1') return '#6fd6c9';
+      if (layer === 'L2') return '#c278d6';
+      return null;
+    }
+
+    function useL2Recents(events) {
+      return React.useMemo(() => {
+        const map = new Map();
+        const wakeUp = (events ?? []).find(e => e.event_type === 'hook_wake_up');
+        if (!wakeUp) return map;
+        const ids = wakeUp.metadata?.memory_ids?.L2 ?? [];
+        const expiry = new Date(wakeUp.timestamp).getTime() + 60000;
+        if (expiry <= Date.now()) return map;
+        for (const id of ids) {
+          map.set(id, expiry);
+        }
+        return map;
+      }, [events]);
     }
 
     // ── Bar component ─────────────────────────────────────────────────────────────
@@ -555,6 +593,8 @@
               memory_type: e.memory_type,
               agent: e.agent ?? '∅',
               content: e.content ?? '',
+              tags: e.metadata?.tags ?? '',
+              links: e.links ?? '',
               color: paletteFor(e.memory_type),
               size: 4 + Math.log((e.access_count ?? 0) + 1) * 2,
               access_count: e.access_count ?? 0,

@@ -159,7 +159,7 @@
     }
 
     // ── Header ────────────────────────────────────────────────────────────────────
-    function Header({ stats, queue, lastError, startMs, buckets, events, tab, setTab }) {
+    function Header({ stats, queue, lastError, startMs, buckets, events, tab, setTab, tweaks, setTweaks }) {
       const types = Object.entries(stats?.types ?? {})
         .sort(([, a], [, b]) => b - a)
         .slice(0, 8);
@@ -215,6 +215,18 @@
                 background: lastError ? "var(--err)" : "var(--ok)",
                 display: "inline-block",
               }} title={lastError ?? "ok"} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+              <span style={{ color: "var(--dim)" }}>agent:</span>
+              <select
+                value={tweaks?.agentFilter ?? 'all'}
+                onChange={e => setTweaks(t => ({ ...t, agentFilter: e.target.value }))}
+                style={{ background: "#222", color: "var(--fg)", border: "1px solid rgba(255,255,255,0.15)", fontFamily: "inherit", fontSize: "11px", padding: "1px 4px" }}
+              >
+                {['all', ...new Set((events ?? []).map(e => e.agent).filter(Boolean))].sort().map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
             </div>
             <div className="tab-bar" style={{ padding: 0, borderBottom: "none" }}>
               {['graph', 'matrix', 'console'].map(name => (
@@ -1305,6 +1317,11 @@
       const thoughts = useThoughts(tweaks.speed, paused, nodeSet, activatedAtRef);
       const timeline = useTimeline();
       const lastError = statsError || eventsError;
+      const agentFilter = tweaks.agentFilter ?? 'all';
+      const filterByAgent = React.useCallback(
+        (arr) => agentFilter === 'all' ? arr : (arr ?? []).filter(item => item.agent === agentFilter),
+        [agentFilter]
+      );
 
       useEffect(() => {
         function onKey(e) {
@@ -1324,7 +1341,7 @@
 
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
-          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} events={events} tab={tweaks.tab} setTab={setTab} />
+          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} events={events} tab={tweaks.tab} setTab={setTab} tweaks={tweaks} setTweaks={setTweaks} />
           <LeftPanel>
             <ClusterMeters stats={stats} />
             <TopAccessed entries={graph.nodes} focus={focus} setFocus={setFocus} />
@@ -1333,7 +1350,7 @@
             <div className="tab-content">
               {tweaks.tab === 'graph' && (
                 <BrainGraph
-                  nodes={graph.nodes}
+                  nodes={filterByAgent(graph.nodes)}
                   edges={graph.edges}
                   lastError={graph.lastError}
                   isLoading={graph.isLoading}
@@ -1350,11 +1367,11 @@
             </div>
           </div>
           <ThoughtStream
-            events={thoughts.events}
+            events={filterByAgent(thoughts.events)}
             focus={focus}
             setFocus={setFocus}
           />
-          <Footer events={events} searchRef={footerSearchRef} />
+          <Footer events={filterByAgent(events)} searchRef={footerSearchRef} />
           <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} open={tweaksOpen} setOpen={setTweaksOpen} />
         </div>
       );

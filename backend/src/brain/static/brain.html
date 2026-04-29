@@ -205,6 +205,29 @@
               <span style={{ color: "var(--accent)", fontWeight: "bold", letterSpacing: "0.05em" }}>brain</span>
               <span style={{ color: "var(--dim)", fontSize: "11px" }}>v0.2 · pid 1</span>
             </div>
+            {(() => {
+              const lastWakeUp = (events ?? []).find(e => e.event_type === 'hook_wake_up');
+              const l2Count = lastWakeUp?.metadata?.memory_ids?.L2?.length ?? 0;
+              const clickable = l2Count > 0 && lastWakeUp?.event_id;
+              return (
+                <span
+                  style={{
+                    padding: "1px 6px",
+                    borderRadius: "3px",
+                    background: l2Count > 0 ? "var(--l2)" : "rgba(255,255,255,0.05)",
+                    color: l2Count > 0 ? "#000" : "var(--dim)",
+                    cursor: clickable ? "pointer" : "default",
+                    fontSize: "11px",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                  onClick={() => {
+                    if (clickable) window.location.hash = '#/hook/' + lastWakeUp.event_id;
+                  }}
+                >
+                  L2: {l2Count}
+                </span>
+              );
+            })()}
             <div style={{ fontSize: "11px", color: "var(--dim)" }}>
               up {formatUptime(startMs)} · thoughts {(events ?? []).length} · evt/s {(eventsLast60s.length / 60).toFixed(1)}
             </div>

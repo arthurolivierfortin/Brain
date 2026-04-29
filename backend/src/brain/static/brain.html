@@ -66,6 +66,13 @@
     .footer-search .matches-badge { color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
     .tail-indicator { margin-left: auto; opacity: 0.45; font-style: italic; font-size: 10px; font-family: var(--font); }
     .empty-state { padding: 12px 16px; opacity: 0.45; font-style: italic; font-size: 11px; }
+    .inspector-empty { padding: 16px; opacity: 0.5; font-style: italic; }
+    .inspector h3 { font-size: 14px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); margin: 0; }
+    .inspector-grid { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; padding: 12px 16px; font-size: 11px; }
+    .inspector-grid .label { color: var(--dim); }
+    .inspector-section { padding: 8px 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px; }
+    .inspector-section h4 { font-size: 11px; color: var(--dim); margin-bottom: 6px; }
+    .inspector-link { cursor: pointer; color: var(--accent); padding: 2px 0; display: block; }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -1518,6 +1525,70 @@
       return (
         <div className="left-panel">
           {children}
+        </div>
+      );
+    }
+
+    // ── MemoryInspector ───────────────────────────────────────────────────────────
+    function MemoryInspector({ memId }) {
+      const { nodes } = useGraph();
+      const { events } = useEvents(1, false);
+      const node = nodes.find(n => n.id === memId);
+
+      if (!node) {
+        return <div className="inspector-empty">memory {memId} not found in current graph</div>;
+      }
+
+      const linkIds = node.links
+        ? node.links.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+      const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+      const lastWakeUp = (events ?? []).find(
+        e => e.event_type === 'hook_wake_up' &&
+             (e.metadata?.memory_ids?.L2 ?? []).includes(memId)
+      );
+      const cosineScore = lastWakeUp?.metadata?.cosine_scores?.[memId];
+
+      return (
+        <div className="inspector">
+          <h3>{(node.content ?? memId).slice(0, 80)}</h3>
+          <div className="inspector-grid">
+            <span className="label">id</span><span style={{ wordBreak: 'break-all', opacity: 0.7 }}>{node.id}</span>
+            <span className="label">memory_type</span>
+            <span>
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: node.color, marginRight: '6px' }} />
+              {node.memory_type ?? '—'}
+            </span>
+            <span className="label">tags</span><span style={{ opacity: 0.8 }}>{node.tags || '—'}</span>
+            <span className="label">agent</span><span>{node.agent ?? '—'}</span>
+            <span className="label">access_count</span><span>{node.access_count ?? 0}</span>
+          </div>
+
+          <div className="inspector-section">
+            <h4>linked memories ({linkIds.length})</h4>
+            {linkIds.length === 0 && <span style={{ opacity: 0.5 }}>none</span>}
+            {linkIds.map(lid => {
+              const linked = nodeById.get(lid);
+              return (
+                <span
+                  key={lid}
+                  className="inspector-link"
+                  onClick={() => { window.location.hash = '#/memory/' + lid; }}
+                >
+                  <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: linked ? paletteFor(linked.memory_type) : 'var(--dim)', marginRight: '6px' }} />
+                  {linked ? (linked.content ?? lid).slice(0, 60) : lid.slice(0, 16) + '…'}
+                </span>
+              );
+            })}
+          </div>
+
+          <div className="inspector-section">
+            <h4>L2 cosine score</h4>
+            {lastWakeUp
+              ? <span>cosine = {cosineScore != null ? cosineScore.toFixed(3) : '—'}</span>
+              : <span style={{ opacity: 0.5 }}>not loaded by L2 recently</span>}
+          </div>
         </div>
       );
     }

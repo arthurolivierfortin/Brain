@@ -321,6 +321,7 @@ def create_http_app():
                     self._json_response({"error": str(e)}, status=500)
             elif self.path == "/hook/wake_up":
                 import os
+
                 from brain.hook import HookRequest, WakeUpHandler
                 agent = data.get("agent", "")
                 if not agent:

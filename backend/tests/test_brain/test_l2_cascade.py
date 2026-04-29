@@ -10,8 +10,14 @@ from brain.hook import HookRequest, WakeUpHandler
 
 
 def _make_req(**kwargs) -> HookRequest:
-    defaults = dict(agent="test-agent", project="/proj", session_id="s1",
-                    git_branch="", git_recent_commits="", claude_md_excerpt="")
+    defaults = {
+        "agent": "test-agent",
+        "project": "/proj",
+        "session_id": "s1",
+        "git_branch": "",
+        "git_recent_commits": "",
+        "claude_md_excerpt": "",
+    }
     defaults.update(kwargs)
     return HookRequest(**defaults)
 

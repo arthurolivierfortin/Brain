@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,6 +20,23 @@ BRAIN_URL = os.environ.get("BRAIN_URL", "http://localhost:8621")
 TIMEOUT_SECONDS = 0.5
 
 _GENERIC_BASENAMES = frozenset({"docker", "src", "app", "project", "repo", "code"})
+
+
+def _run_git(args: list[str], cwd: str | None = None) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
 
 
 def derive_agent(cwd: str) -> str:

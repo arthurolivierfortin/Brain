@@ -46,6 +46,17 @@ def _collect_git_branch(git_root: str) -> str | None:
     return result
 
 
+def _collect_git_log(git_root: str) -> str | None:
+    result = _run_git(["log", "--oneline", "-10"], cwd=git_root)
+    if result is None:
+        return None
+    encoded = result.encode("utf-8")
+    if len(encoded) <= 600:
+        return result
+    truncated = encoded[:600].decode("utf-8", errors="ignore")
+    return truncated.rsplit("\n", 1)[0]
+
+
 def derive_agent(cwd: str) -> str:
     p = Path(cwd)
     basename = p.name.lower() or "default"

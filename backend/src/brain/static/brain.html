@@ -265,7 +265,7 @@
     }
 
     // ── TweaksPanel ────────────────────────────────────────────────────────────────
-    const TWEAK_DEFAULTS = { accent: '#6fd6c9', speed: 1, running: true, tab: 'graph' };
+    const TWEAK_DEFAULTS = { accent: '#6fd6c9', speed: 1, running: true, tab: 'graph', animations: true, agentFilter: 'all', matrixSubview: 'types' };
     const STORAGE_KEY = 'brain-monitor-tweaks-v1';
     let warnedAboutStorage = false;
 
@@ -344,6 +344,14 @@
                   value={tweaks.accent}
                   onChange={e => setTweaks(t => ({ ...t, accent: e.target.value }))}
                 />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="checkbox"
+                  checked={tweaks.animations !== false}
+                  onChange={e => setTweaks(t => ({ ...t, animations: e.target.checked }))}
+                />
+                animations
               </label>
             </div>
           )}

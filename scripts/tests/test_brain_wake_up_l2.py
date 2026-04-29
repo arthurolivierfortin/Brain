@@ -189,3 +189,47 @@ def test_subprocess_sends_enriched_payload_when_git_and_claudemd_present(tmp_pat
 
     assert "claude_md_excerpt" in body, f"claude_md_excerpt missing from payload: {body}"
     assert len(body["claude_md_excerpt"]) == 1000
+
+
+# ---------------------------------------------------------------------------
+# [TEST-7] Integration: subprocess omits enrichment fields when no git repo + no CLAUDE.md
+# ---------------------------------------------------------------------------
+def test_subprocess_omits_enrichment_fields_when_sources_absent(tmp_path):
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    port = _free_port()
+    _CaptorHandler.captured = []
+    server = http.server.HTTPServer(("127.0.0.1", port), _CaptorHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        env = {**os.environ, "BRAIN_URL": f"http://127.0.0.1:{port}"}
+        stdin_payload = json.dumps({"cwd": str(empty_dir), "session_id": "s2"})
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT_PATH],
+            input=stdin_payload,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10,
+        )
+    finally:
+        server.shutdown()
+
+    stdout_parsed = json.loads(proc.stdout)
+    assert stdout_parsed["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert stdout_parsed["hookSpecificOutput"]["additionalContext"] == ""
+
+    assert len(_CaptorHandler.captured) == 1
+    body = _CaptorHandler.captured[0]
+
+    assert "agent" in body
+    assert "project" in body
+    assert "session_id" in body
+
+    assert "git_branch" not in body
+    assert "git_recent_commits" not in body
+    assert "claude_md_excerpt" not in body

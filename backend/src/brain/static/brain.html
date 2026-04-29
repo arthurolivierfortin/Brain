@@ -89,6 +89,10 @@
       return `${h}h:${String(m).padStart(2, "0")}m`;
     }
 
+    function formatTime(iso) {
+      return new Date(iso).toTimeString().slice(0, 8);
+    }
+
     function classifyEvent(eventType) {
       const t = eventType ?? '';
       if (t === 'hook_wake_up') return 'green';
@@ -1486,7 +1490,7 @@
           <pre ref={preRef} onScroll={onScroll}>
             {newest100.map((e, i) => (
               <span key={i} className={`console-line console-${classifyEvent(e.event_type)}`}>
-                {JSON.stringify(e)}{'\n'}
+                {`[${formatTime(e.timestamp)}] ${(e.event_type ?? '').padEnd(20)} · ${(e.agent ?? '∅').padEnd(20)} · ${(e.details ?? '').slice(0, 80)}`}{'\n'}
               </span>
             ))}
           </pre>

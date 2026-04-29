@@ -765,7 +765,7 @@
     }
 
     // ── render ────────────────────────────────────────────────────────────────────
-    function render(ctx, nodes, edges, view, activatedAt, focus, nodeById) {
+    function render(ctx, nodes, edges, view, activatedAt, focus, nodeById, l2Recents) {
       const now = Date.now();
       ctx.save();
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -820,6 +820,21 @@
         }
       }
 
+      // Layer ring pass — drawn after node fill so rings visually surround nodes
+      const safeL2 = l2Recents ?? new Map();
+      for (const n of nodes) {
+        const layer = inferLayer(n, safeL2);
+        const ringColor = layerRingColor(layer);
+        if (!ringColor) continue;
+        const dim = focus && focus !== n.id && !(edgeSetTouchingFocus && edgeSetTouchingFocus.has(n.id));
+        ctx.globalAlpha = dim ? 0.18 : 1;
+        ctx.strokeStyle = ringColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.size + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
 
@@ -838,7 +853,7 @@
     }
 
     // ── BrainGraph ────────────────────────────────────────────────────────────────
-    function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused }) {
+    function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused, l2Recents }) {
       const wrapRef = React.useRef(null);
       const canvasRef = React.useRef(null);
       const [size, setSize] = React.useState({ w: 600, h: 400 });
@@ -958,13 +973,13 @@
         const tick = () => {
           if (!paused) {
             simulate(nodes, edges, size, dragNodeRef.current, nodeById);
-            render(ctx, nodes, edges, viewRef.current, activatedAtRef.current, focus, nodeById);
+            render(ctx, nodes, edges, viewRef.current, activatedAtRef.current, focus, nodeById, l2Recents);
           }
           rafId = requestAnimationFrame(tick);
         };
         rafId = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(rafId);
-      }, [nodes, edges, size, paused, focus, nodeById, activatedAtRef]);
+      }, [nodes, edges, size, paused, focus, nodeById, activatedAtRef, l2Recents]);
 
       if (lastError === 'graph too large') {
         return (
@@ -1345,6 +1360,7 @@
         (arr) => agentFilter === 'all' ? arr : (arr ?? []).filter(item => item.agent === agentFilter),
         [agentFilter]
       );
+      const l2Recents = useL2Recents(events);
 
       useEffect(() => {
         function onKey(e) {
@@ -1383,6 +1399,7 @@
                   setFocus={setFocus}
                   activatedAtRef={activatedAtRef}
                   paused={paused}
+                  l2Recents={l2Recents}
                 />
               )}
               {tweaks.tab === 'matrix' && <MatrixView entries={graph.nodes} />}

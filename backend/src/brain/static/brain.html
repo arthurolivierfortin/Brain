@@ -1593,6 +1593,102 @@
       );
     }
 
+    // ── HookReplay ────────────────────────────────────────────────────────────────
+    function HookReplay({ eventId }) {
+      const { events } = useEvents(1, false);
+      const event = (events ?? []).find(e => e.event_id === eventId);
+
+      React.useEffect(() => {
+        function handler(e) {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+          const idx = (events ?? []).findIndex(ev => ev.event_id === eventId);
+          if (idx === -1) return;
+          if (e.key === 'j') {
+            const next = events[idx - 1];
+            if (next?.event_id) {
+              history.pushState(null, '', '#/hook/' + next.event_id);
+              window.dispatchEvent(new Event('hashchange'));
+            }
+          } else if (e.key === 'k') {
+            const prev = events[idx + 1];
+            if (prev?.event_id) {
+              history.pushState(null, '', '#/hook/' + prev.event_id);
+              window.dispatchEvent(new Event('hashchange'));
+            }
+          }
+        }
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+      }, [events, eventId]);
+
+      if (!event) {
+        return <div className="inspector-empty">event {eventId} not in last 200</div>;
+      }
+
+      const layers = ['L0', 'L1', 'L2'];
+      const memoryIds = event.metadata?.memory_ids ?? {};
+      const tokensPer = event.metadata?.tokens_per_layer ?? {};
+      const cosineScores = event.metadata?.cosine_scores ?? {};
+
+      return (
+        <div className="inspector">
+          <h3>{event.event_type}</h3>
+          <div className="inspector-grid">
+            <span className="label">timestamp</span><span style={{ opacity: 0.7 }}>{event.timestamp}</span>
+            <span className="label">agent</span><span>{event.agent ?? '—'}</span>
+            <span className="label">event_id</span><span style={{ opacity: 0.7, wordBreak: 'break-all' }}>{event.event_id ?? '—'}</span>
+          </div>
+
+          <div className="inspector-section">
+            <h4>request</h4>
+            <pre style={{ fontSize: '10px', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#08090d', padding: '6px 8px', maxHeight: '120px', overflowY: 'auto' }}>
+              {JSON.stringify(event.metadata?.request ?? {}, null, 2)}
+            </pre>
+          </div>
+
+          <div className="inspector-section">
+            <h4>response</h4>
+            <pre style={{ fontSize: '10px', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#08090d', padding: '6px 8px', maxHeight: '120px', overflowY: 'auto' }}>
+              {JSON.stringify(event.metadata?.response ?? event.metadata ?? {}, null, 2)}
+            </pre>
+          </div>
+
+          <div className="inspector-section">
+            <h4>per-layer breakdown</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+              <thead>
+                <tr>
+                  {['layer', 'memory_ids', 'tokens', 'cosine_scores'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '2px 6px', color: 'var(--dim)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {layers.map(layer => {
+                  const ids = memoryIds[layer] ?? [];
+                  const tokens = tokensPer[layer];
+                  const scores = layer === 'L2' ? cosineScores : null;
+                  return (
+                    <tr key={layer}>
+                      <td style={{ padding: '3px 6px', color: layerRingColor(layer) ?? 'var(--fg)' }}>{layer}</td>
+                      <td style={{ padding: '3px 6px', opacity: 0.8 }}>{ids.length > 0 ? ids.length + ' ids' : '—'}</td>
+                      <td style={{ padding: '3px 6px', opacity: 0.8 }}>{tokens != null ? tokens : '—'}</td>
+                      <td style={{ padding: '3px 6px', opacity: 0.8 }}>
+                        {scores && Object.keys(scores).length > 0
+                          ? Object.values(scores).map(v => v.toFixed(3)).join(', ')
+                          : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ marginTop: '6px', fontSize: '10px', color: 'var(--dim)' }}>j/k to navigate events</div>
+          </div>
+        </div>
+      );
+    }
+
     // ── HashRouter ────────────────────────────────────────────────────────────────
     function parseHash(hash) {
       let m;

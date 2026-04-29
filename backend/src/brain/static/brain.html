@@ -321,6 +321,7 @@
     // ── TweaksPanel ────────────────────────────────────────────────────────────────
     const TWEAK_DEFAULTS = { accent: '#6fd6c9', speed: 1, running: true, tab: 'graph', animations: true, agentFilter: 'all', matrixSubview: 'types' };
     const STORAGE_KEY = 'brain-monitor-tweaks-v1';
+    const ANIM_CAP = 20;
     let warnedAboutStorage = false;
 
     function readStoredTweaks(defaults) {
@@ -765,7 +766,7 @@
     }
 
     // ── render ────────────────────────────────────────────────────────────────────
-    function render(ctx, nodes, edges, view, activatedAt, focus, nodeById, l2Recents) {
+    function render(ctx, nodes, edges, view, activatedAt, focus, nodeById, l2Recents, pendingAnimsRef, animationsEnabled) {
       const now = Date.now();
       ctx.save();
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -835,6 +836,43 @@
         ctx.stroke();
       }
 
+      // Animation pass — only when animations enabled
+      if (animationsEnabled && pendingAnimsRef) {
+        const now2 = Date.now();
+        const surviving = [];
+        for (const anim of pendingAnimsRef.current) {
+          const age = now2 - anim.startMs;
+          if (anim.kind === 'entry') {
+            if (age >= 600) continue;
+            const n = nodeById.get(anim.nodeId);
+            if (!n) { surviving.push(anim); continue; }
+            const progress = age / 600;
+            ctx.globalAlpha = progress;
+            ctx.fillStyle = n.color;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.size * progress, 0, Math.PI * 2);
+            ctx.fill();
+            surviving.push(anim);
+          } else if (anim.kind === 'pulse') {
+            if (age >= 400) continue;
+            const n = nodeById.get(anim.nodeId);
+            if (!n) { surviving.push(anim); continue; }
+            const t = age / 400;
+            const scale = t < 0.5 ? 1 + 0.3 * (t * 2) : 1 + 0.3 * (2 - t * 2);
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = n.color;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.size * scale, 0, Math.PI * 2);
+            ctx.fill();
+            surviving.push(anim);
+          } else if (anim.kind === 'edge') {
+            if (age >= 800) continue;
+            surviving.push(anim);
+          }
+        }
+        pendingAnimsRef.current = surviving;
+      }
+
       ctx.restore();
     }
 
@@ -853,7 +891,7 @@
     }
 
     // ── BrainGraph ────────────────────────────────────────────────────────────────
-    function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused, l2Recents }) {
+    function BrainGraph({ nodes, edges, lastError, isLoading, lastFetchedAt, onRefresh, focus, setFocus, activatedAtRef, paused, l2Recents, pendingAnimsRef, animationsEnabled }) {
       const wrapRef = React.useRef(null);
       const canvasRef = React.useRef(null);
       const [size, setSize] = React.useState({ w: 600, h: 400 });
@@ -973,13 +1011,13 @@
         const tick = () => {
           if (!paused) {
             simulate(nodes, edges, size, dragNodeRef.current, nodeById);
-            render(ctx, nodes, edges, viewRef.current, activatedAtRef.current, focus, nodeById, l2Recents);
+            render(ctx, nodes, edges, viewRef.current, activatedAtRef.current, focus, nodeById, l2Recents, pendingAnimsRef, animationsEnabled);
           }
           rafId = requestAnimationFrame(tick);
         };
         rafId = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(rafId);
-      }, [nodes, edges, size, paused, focus, nodeById, activatedAtRef, l2Recents]);
+      }, [nodes, edges, size, paused, focus, nodeById, activatedAtRef, l2Recents, pendingAnimsRef, animationsEnabled]);
 
       if (lastError === 'graph too large') {
         return (
@@ -1340,6 +1378,9 @@
       const [tweaksOpen, setTweaksOpen] = useState(false);
       const activatedAtRef = useRef({});
       const footerSearchRef = useRef(null);
+      const pendingAnimsRef = useRef([]);
+      const prevEventsForAnimRef = useRef([]);
+      const prevEdgeKeysRef = useRef(new Set());
 
       useEffect(() => {
         const onVisibility = () => setDocHidden(document.hidden);
@@ -1361,6 +1402,42 @@
         [agentFilter]
       );
       const l2Recents = useL2Recents(events);
+
+      useEffect(() => {
+        if (!tweaks.animations) {
+          prevEventsForAnimRef.current = events;
+          prevEdgeKeysRef.current = new Set(graph.edges.map(([a, b]) => `${a}|${b}`));
+          return;
+        }
+        const prevSet = new Set(prevEventsForAnimRef.current.map(e => e.event_id ?? e.timestamp));
+        for (const ev of events) {
+          const key = ev.event_id ?? ev.timestamp;
+          if (prevSet.has(key)) continue;
+          const nodeId = ev.metadata?.entry_id ?? ev.node_id ?? null;
+          if (!nodeId) continue;
+          const kind =
+            ev.event_type === 'stored' ? 'entry' :
+            ev.event_type === 'reinforced' ? 'pulse' :
+            null;
+          if (!kind) continue;
+          const anims = pendingAnimsRef.current;
+          if (anims.length >= ANIM_CAP) anims.shift();
+          anims.push({ kind, nodeId, startMs: Date.now() });
+        }
+        prevEventsForAnimRef.current = events;
+
+        const currentEdgeKeys = new Set(
+          graph.edges.map(([a, b]) => `${a}|${b}`)
+        );
+        for (const key of currentEdgeKeys) {
+          if (!prevEdgeKeysRef.current.has(key)) {
+            const anims = pendingAnimsRef.current;
+            if (anims.length >= ANIM_CAP) anims.shift();
+            anims.push({ kind: 'edge', edgeKey: key, startMs: Date.now() });
+          }
+        }
+        prevEdgeKeysRef.current = currentEdgeKeys;
+      }, [events, graph.edges, tweaks.animations]);
 
       useEffect(() => {
         function onKey(e) {
@@ -1400,6 +1477,8 @@
                   activatedAtRef={activatedAtRef}
                   paused={paused}
                   l2Recents={l2Recents}
+                  pendingAnimsRef={pendingAnimsRef}
+                  animationsEnabled={tweaks.animations !== false}
                 />
               )}
               {tweaks.tab === 'matrix' && <MatrixView entries={graph.nodes} />}

@@ -37,9 +37,9 @@
 
 ## Verification gates
 
-- [ ] [GATE-1] `cd backend && python -m ruff check .` passes
-- [ ] [GATE-2] `cd backend && python -m pytest -q` passes (baseline 193, expect ~205 after this PR: +10 new tests, -1 deleted test, ~+3 from existing-test updates)
-- [ ] [GATE-3] Frontend skipped — no `frontend/` changes in this PR
+- [x] [GATE-1] `cd backend && python -m ruff check .` passes
+- [x] [GATE-2] `cd backend && python -m pytest -q` passes — 213 passed in 1526.27s (193 baseline + 20 new − 1 deleted = 212 expected, 213 actual due to extra threshold helper tests)
+- [x] [GATE-3] Frontend skipped — no `frontend/` changes in this PR
 
 **Note:** mypy is NOT a hard gate for Brain. Builder/judge MAY run it for advisory signal but failures don't block.
 

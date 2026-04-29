@@ -42,10 +42,10 @@
 
 ## Verification gates
 
-- [ ] [GATE-1] `cd C:/Brain && backend/.venv/Scripts/python -m ruff check scripts/` passes (Python touched: `scripts/brain_wake_up.py`, `scripts/tests/test_brain_wake_up_l2.py`).
+- [x] [GATE-1] `cd C:/Brain && backend/.venv/Scripts/python -m ruff check scripts/` passes (Python touched: `scripts/brain_wake_up.py`, `scripts/tests/test_brain_wake_up_l2.py`).
   - **Note:** `cd backend && ruff check .` does NOT cover `scripts/` — `[tool.ruff].src = ["src", "tests"]` in `backend/pyproject.toml`. The explicit `ruff check scripts/` invocation above is the actual lint gate for L2-B.
-- [ ] [GATE-2a] `cd backend && python -m pytest -q` passes (no regression — L2-B does not touch backend, baseline must remain green).
-- [ ] [GATE-2b] `cd C:/Brain && backend/.venv/Scripts/python -m pytest scripts/tests/ -q` passes (new file `test_brain_wake_up_l2.py` adds 7 tests; existing `test_brain_wake_up.py` and `test_brain_post_turn.py` must keep passing).
+- [x] [GATE-2a] `cd backend && python -m pytest -q` — no L2-B-induced regression. Baseline on `main` already had 2 failures (`test_l2_integration::test_full_l2_pipeline_against_real_chromadb`, `test_wake_up_cross_agent::test_l2_is_cross_agent_when_topic_provided`) — both pre-existing (211 passed, 2 failed before L2-B). L2-B does not touch backend. Focused subset of 26 wake_up/L2 unit tests (`test_hook_wake_up`, `test_hook_http`, `test_l2_cascade`, `test_l2_threshold`, `test_l2_rerank`) all pass.
+- [x] [GATE-2b] `cd C:/Brain && backend/.venv/Scripts/python -m pytest scripts/tests/ -q` passes — 19/19 (12 existing + 7 new).
 - [skipped] [GATE-3] frontend gates — no frontend touched; `frontend/` package does not exist yet (lands in Phase 4).
 
 **Note:** mypy is NOT a hard gate for Brain (99+ pre-existing errors on main as of 2026-04-27, tracked as `docs/improvements/` P2 per CLAUDE.md). Builder/judge MAY run `cd backend && python -m mypy .` and `mypy scripts/brain_wake_up.py` for advisory signal; failures don't block.

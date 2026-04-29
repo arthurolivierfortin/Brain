@@ -949,6 +949,9 @@
           dragNodeRef.current = null;
           if (moved < 3) {
             setFocus(prev => prev === node.id ? null : node.id);
+            if (node.id) {
+              window.location.hash = '#/memory/' + node.id;
+            }
           }
         } else {
           if (moved < 3) setFocus(null);
@@ -1519,6 +1522,81 @@
       );
     }
 
+    // ── HashRouter ────────────────────────────────────────────────────────────────
+    function parseHash(hash) {
+      let m;
+      m = hash.match(/^#\/memory\/(.+)$/);
+      if (m) return { route: 'memory', id: decodeURIComponent(m[1]) };
+      m = hash.match(/^#\/hook\/(.+)$/);
+      if (m) return { route: 'hook', id: decodeURIComponent(m[1]) };
+      m = hash.match(/^#\/agent\/(.+)$/);
+      if (m) return { route: 'agent', name: decodeURIComponent(m[1]) };
+      return { route: null };
+    }
+
+    function HashRouter({ children }) {
+      const [hash, setHash] = React.useState(window.location.hash);
+
+      React.useEffect(() => {
+        const handler = () => setHash(window.location.hash);
+        window.addEventListener('hashchange', handler);
+        return () => window.removeEventListener('hashchange', handler);
+      }, []);
+
+      React.useEffect(() => {
+        const handler = (e) => {
+          const parsed = parseHash(window.location.hash);
+          if (parsed.route && e.key === 'Escape') {
+            e.stopImmediatePropagation();
+            history.replaceState(null, '', window.location.pathname);
+            window.dispatchEvent(new Event('hashchange'));
+          }
+        };
+        document.addEventListener('keydown', handler, true);
+        return () => document.removeEventListener('keydown', handler, true);
+      }, []);
+
+      const parsed = parseHash(hash);
+
+      function closeDrawer() {
+        history.replaceState(null, '', window.location.pathname);
+        window.dispatchEvent(new Event('hashchange'));
+      }
+
+      let routeView = null;
+      if (parsed.route === 'memory') routeView = <MemoryInspector memId={parsed.id} />;
+      else if (parsed.route === 'hook') routeView = <HookReplay eventId={parsed.id} />;
+      else if (parsed.route === 'agent') routeView = <AgentProfile name={parsed.name} />;
+
+      return (
+        <>
+          {children}
+          {parsed.route && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 90 }}
+                onClick={closeDrawer}
+              />
+              <aside style={{
+                position: 'fixed', right: 0, top: 0, height: '100vh', width: '600px',
+                background: '#0d0e15', borderLeft: '1px solid rgba(255,255,255,0.1)',
+                zIndex: 91, overflowY: 'auto',
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--dim)' }}>{hash}</span>
+                  <button
+                    onClick={closeDrawer}
+                    style={{ background: 'none', border: 'none', color: 'var(--fg)', cursor: 'pointer', fontSize: '16px' }}
+                  >×</button>
+                </div>
+                {routeView}
+              </aside>
+            </>
+          )}
+        </>
+      );
+    }
+
     // ── App ────────────────────────────────────────────────────────────────────────
     function App() {
       const startMs = useRef(Date.now()).current;
@@ -1669,7 +1747,11 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    ReactDOM.createRoot(document.getElementById("root")).render(
+      <HashRouter>
+        <App />
+      </HashRouter>
+    );
   </script>
 </body>
 </html>

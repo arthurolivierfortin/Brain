@@ -57,6 +57,22 @@ def _collect_git_log(git_root: str) -> str | None:
     return truncated.rsplit("\n", 1)[0]
 
 
+def _collect_claude_md(cwd: str, git_root: str | None) -> str | None:
+    candidates = [Path(cwd) / "CLAUDE.md"]
+    if git_root is not None and git_root != cwd:
+        candidates.append(Path(git_root) / "CLAUDE.md")
+    for candidate in candidates:
+        try:
+            with candidate.open("rb") as f:
+                raw = f.read(16384)
+            text = raw.decode("utf-8", errors="replace")[:1000]
+            if text:
+                return text
+        except (OSError, UnicodeDecodeError, FileNotFoundError):
+            continue
+    return None
+
+
 def derive_agent(cwd: str) -> str:
     p = Path(cwd)
     basename = p.name.lower() or "default"

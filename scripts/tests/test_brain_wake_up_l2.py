@@ -67,3 +67,25 @@ def test_collect_git_log_truncates_at_line_boundary():
 
     with patch.object(hook, "_run_git", return_value=None):
         assert hook._collect_git_log("/x") is None
+
+
+# ---------------------------------------------------------------------------
+# [TEST-5] _collect_claude_md reads, truncates, falls back to git_root
+# ---------------------------------------------------------------------------
+def test_collect_claude_md_reads_truncates_and_falls_back(tmp_path):
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text("a" * 1500, encoding="utf-8")
+    result_a = hook._collect_claude_md(str(tmp_path), git_root=None)
+    assert result_a is not None
+    assert len(result_a) == 1000
+
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+    result_b = hook._collect_claude_md(str(subdir), git_root=str(tmp_path))
+    assert result_b is not None
+    assert len(result_b) == 1000
+
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    result_c = hook._collect_claude_md(str(empty_dir), git_root=str(empty_dir))
+    assert result_c is None

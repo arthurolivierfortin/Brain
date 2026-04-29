@@ -64,6 +64,8 @@
     .footer-search { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
     .footer-search input { background: #08090d; border: 1px solid #2a2f3d; color: var(--fg); padding: 2px 6px; font-family: inherit; font-size: 11px; min-width: 200px; outline: none; }
     .footer-search .matches-badge { color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .tail-indicator { margin-left: auto; opacity: 0.45; font-style: italic; font-size: 10px; font-family: var(--font); }
+    .empty-state { padding: 12px 16px; opacity: 0.45; font-style: italic; font-size: 11px; }
   </style>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -272,11 +274,13 @@
     }
 
     // ── Footer ─────────────────────────────────────────────────────────────────────
-    function Footer({ events, searchRef }) {
+    function Footer({ events, searchRef, lastError }) {
       const [filter, setFilter] = React.useState('');
       const filtered = filter === '' ? (events ?? []) : (events ?? []).filter(
         e => JSON.stringify(e).toLowerCase().includes(filter.toLowerCase())
       );
+
+      const showEmpty = filter === '' && (events ?? []).length === 0 && !lastError;
 
       return (
         <footer className="footer-row" style={{
@@ -293,31 +297,36 @@
               onChange={e => setFilter(e.target.value)}
             />
             <span className="matches-badge">{filtered.length} / {(events ?? []).length} matches</span>
+            <span className="tail-indicator">tail -f /var/log/brain/events.jsonl</span>
           </div>
-          {filtered.map((ev, i) => {
-            const type = ev.event_type ?? "";
-            let badgeColor = "#555";
-            if (type === "hook_wake_up") badgeColor = "var(--ok)";
-            else if (type === "hook_post_turn") badgeColor = "var(--accent)";
-            else if (type.includes("reject")) badgeColor = "var(--swap)";
-            else if (type.includes("error") || type.includes("failed")) badgeColor = "var(--err)";
+          {showEmpty ? (
+            <div className="empty-state">waiting for system events…</div>
+          ) : (
+            filtered.map((ev, i) => {
+              const type = ev.event_type ?? "";
+              let badgeColor = "#555";
+              if (type === "hook_wake_up") badgeColor = "var(--ok)";
+              else if (type === "hook_post_turn") badgeColor = "var(--accent)";
+              else if (type.includes("reject")) badgeColor = "var(--swap)";
+              else if (type.includes("error") || type.includes("failed")) badgeColor = "var(--err)";
 
-            const details = (ev.details ?? "").slice(0, 120);
-            return (
-              <div key={i} style={{ display: "flex", gap: "8px", padding: "2px 12px", fontSize: "12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <span style={{ padding: "0 4px", borderRadius: "2px", background: badgeColor, color: "#000", flexShrink: 0, fontSize: "10px" }}>
-                  {type}
-                </span>
-                <span style={{ opacity: 0.7, flexShrink: 0 }}>{ev.agent ?? ""}</span>
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {details}
-                </span>
-                <span style={{ opacity: 0.5, flexShrink: 0, fontSize: "11px" }}>
-                  {formatRelative(ev.timestamp)}
-                </span>
-              </div>
-            );
-          })}
+              const details = (ev.details ?? "").slice(0, 120);
+              return (
+                <div key={i} style={{ display: "flex", gap: "8px", padding: "2px 12px", fontSize: "12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <span style={{ padding: "0 4px", borderRadius: "2px", background: badgeColor, color: "#000", flexShrink: 0, fontSize: "10px" }}>
+                    {type}
+                  </span>
+                  <span style={{ opacity: 0.7, flexShrink: 0 }}>{ev.agent ?? ""}</span>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {details}
+                  </span>
+                  <span style={{ opacity: 0.5, flexShrink: 0, fontSize: "11px" }}>
+                    {formatRelative(ev.timestamp)}
+                  </span>
+                </div>
+              );
+            })
+          )}
         </footer>
       );
     }
@@ -1654,7 +1663,7 @@
             focus={focus}
             setFocus={setFocus}
           />
-          <Footer events={filterByAgent(events)} searchRef={footerSearchRef} />
+          <Footer events={filterByAgent(events)} searchRef={footerSearchRef} lastError={lastError} />
           <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} open={tweaksOpen} setOpen={setTweaksOpen} />
         </div>
       );

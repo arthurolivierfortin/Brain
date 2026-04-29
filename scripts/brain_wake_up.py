@@ -73,6 +73,40 @@ def _collect_claude_md(cwd: str, git_root: str | None) -> str | None:
     return None
 
 
+def _collect_topic_enrichment(cwd: str) -> dict[str, str]:
+    enrichment: dict[str, str] = {}
+
+    git_root: str | None = None
+    try:
+        git_root = _run_git(["rev-parse", "--show-toplevel"], cwd=cwd)
+    except Exception:
+        pass
+
+    if git_root is not None:
+        try:
+            branch = _collect_git_branch(git_root)
+            if branch:
+                enrichment["git_branch"] = branch
+        except Exception:
+            pass
+
+        try:
+            log = _collect_git_log(git_root)
+            if log:
+                enrichment["git_recent_commits"] = log
+        except Exception:
+            pass
+
+    try:
+        excerpt = _collect_claude_md(cwd, git_root)
+        if excerpt:
+            enrichment["claude_md_excerpt"] = excerpt
+    except Exception:
+        pass
+
+    return enrichment
+
+
 def derive_agent(cwd: str) -> str:
     p = Path(cwd)
     basename = p.name.lower() or "default"
@@ -98,7 +132,8 @@ def main(stdin_data: str | None = None) -> int:
         try:
             resp = httpx.post(
                 f"{BRAIN_URL}/hook/wake_up",
-                json={"agent": agent, "project": cwd, "session_id": session_id},
+                json={"agent": agent, "project": cwd, "session_id": session_id,
+                      **_collect_topic_enrichment(cwd)},
                 timeout=TIMEOUT_SECONDS,
             )
             resp.raise_for_status()

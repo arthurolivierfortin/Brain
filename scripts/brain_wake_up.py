@@ -39,6 +39,13 @@ def _run_git(args: list[str], cwd: str | None = None) -> str | None:
     return result.stdout.strip() or None
 
 
+def _collect_git_branch(git_root: str) -> str | None:
+    result = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=git_root)
+    if result == "HEAD":
+        return None
+    return result
+
+
 def derive_agent(cwd: str) -> str:
     p = Path(cwd)
     basename = p.name.lower() or "default"

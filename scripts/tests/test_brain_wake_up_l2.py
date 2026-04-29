@@ -26,3 +26,20 @@ def test_run_git_returns_none_on_nonzero_exit():
     with patch.object(hook.subprocess, "run", return_value=fake):
         result = hook._run_git(["bogus"])
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# [TEST-3] _collect_git_branch handles detached HEAD and happy path
+# ---------------------------------------------------------------------------
+def test_collect_git_branch_handles_detached_head():
+    with patch.object(hook, "_run_git", return_value="HEAD"):
+        result = hook._collect_git_branch("/x")
+    assert result is None
+
+    with patch.object(hook, "_run_git", return_value="feature/foo"):
+        result = hook._collect_git_branch("/x")
+    assert result == "feature/foo"
+
+    with patch.object(hook, "_run_git", return_value=None):
+        result = hook._collect_git_branch("/x")
+    assert result is None

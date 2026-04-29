@@ -159,29 +159,56 @@
     }
 
     // ── Header ────────────────────────────────────────────────────────────────────
-    function Header({ stats, queue, lastError, startMs, buckets }) {
+    function Header({ stats, queue, lastError, startMs, buckets, events, tab, setTab }) {
       const types = Object.entries(stats?.types ?? {})
         .sort(([, a], [, b]) => b - a)
         .slice(0, 8);
       const extra = Object.keys(stats?.types ?? {}).length - 8;
       const total = stats?.total ?? 0;
 
+      const eventsLast60s = (events ?? []).filter(
+        e => Date.now() - new Date(e.timestamp).getTime() < 60000
+      );
+
       return (
         <header className="header-row" style={{
           padding: "10px 16px",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           background: "rgba(255,255,255,0.02)",
+          display: "flex",
+          gap: "24px",
+          alignItems: "flex-start",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "center" }}>
-            <span style={{ color: "var(--accent)", fontWeight: "bold", letterSpacing: "0.05em" }}>
-              brain · live monitor
-            </span>
-            <div style={{ display: "flex", gap: "16px", fontSize: "11px", alignItems: "center" }}>
-              <span>total: <b>{total.toLocaleString()}</b></span>
-              <span>uptime: <b>{formatUptime(startMs)}</b></span>
-              <span style={{ padding: "1px 6px", borderRadius: "3px", background: "rgba(255,255,255,0.1)" }}>
-                phase 2b
-              </span>
+          {/* LEFT: cluster cores + mem/swap */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ marginBottom: "6px" }}>
+              {types.map(([type, count]) => (
+                <Bar
+                  key={type}
+                  label={type}
+                  value={count}
+                  max={total || 1}
+                  color="var(--accent)"
+                />
+              ))}
+              {extra > 0 && (
+                <div style={{ fontSize: "11px", opacity: 0.5, paddingLeft: "96px" }}>+{extra} more types</div>
+              )}
+            </div>
+            <Bar label="mem" value={total} max={16384} color="var(--mem)" />
+            <Bar label="swap" value={queue?.pending ?? 0} max={100} color="var(--swap)" redZone={100} />
+          </div>
+
+          {/* RIGHT: identity + stats + tabs + status */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ color: "var(--accent)", fontWeight: "bold", letterSpacing: "0.05em" }}>brain</span>
+              <span style={{ color: "var(--dim)", fontSize: "11px" }}>v0.2 · pid 1</span>
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--dim)" }}>
+              up {formatUptime(startMs)} · thoughts {(events ?? []).length} · evt/s {(eventsLast60s.length / 60).toFixed(1)}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <ActivitySparkline buckets={buckets} />
               <span style={{
                 width: "8px", height: "8px", borderRadius: "50%",
@@ -189,26 +216,18 @@
                 display: "inline-block",
               }} title={lastError ?? "ok"} />
             </div>
+            <div className="tab-bar" style={{ padding: 0, borderBottom: "none" }}>
+              {['graph', 'matrix', 'console'].map(name => (
+                <button
+                  key={name}
+                  className={tab === name ? 'active' : ''}
+                  onClick={() => setTab(name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
           </div>
-
-          {/* cluster cores */}
-          <div style={{ marginBottom: "6px" }}>
-            {types.map(([type, count]) => (
-              <Bar
-                key={type}
-                label={type}
-                value={count}
-                max={total || 1}
-                color="var(--accent)"
-              />
-            ))}
-            {extra > 0 && (
-              <div style={{ fontSize: "11px", opacity: 0.5, paddingLeft: "96px" }}>+{extra} more types</div>
-            )}
-          </div>
-
-          <Bar label="mem" value={total} max={16384} color="var(--mem)" />
-          <Bar label="swap" value={queue?.pending ?? 0} max={100} color="var(--swap)" redZone={100} />
         </header>
       );
     }
@@ -1252,24 +1271,6 @@
       );
     }
 
-    // ── TabBar ────────────────────────────────────────────────────────────────────
-    function TabBar({ tab, setTab }) {
-      const tabs = ['graph', 'matrix', 'console'];
-      return (
-        <div className="tab-bar">
-          {tabs.map(name => (
-            <button
-              key={name}
-              className={tab === name ? 'active' : ''}
-              onClick={() => setTab(name)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      );
-    }
-
     // ── LeftPanel ─────────────────────────────────────────────────────────────────
     function LeftPanel({ children }) {
       return (
@@ -1323,13 +1324,12 @@
 
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
-          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} />
+          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} events={events} tab={tweaks.tab} setTab={setTab} />
           <LeftPanel>
             <ClusterMeters stats={stats} />
             <TopAccessed entries={graph.nodes} focus={focus} setFocus={setFocus} />
           </LeftPanel>
           <div className="center-area">
-            <TabBar tab={tweaks.tab} setTab={setTab} />
             <div className="tab-content">
               {tweaks.tab === 'graph' && (
                 <BrainGraph

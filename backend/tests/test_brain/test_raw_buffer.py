@@ -132,7 +132,9 @@ def test_redaction_strips_secrets(tmp_path: Path):
 
 
 def test_raw_event_pydantic_validation():
-    with pytest.raises(Exception):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
         RawEvent(
             timestamp=datetime.now(UTC),
             kind="not_a_valid_kind",  # type: ignore[arg-type]

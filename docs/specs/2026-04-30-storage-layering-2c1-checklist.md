@@ -57,9 +57,9 @@
 
 ## Verification gates
 
-- [ ] [GATE-1] `cd backend && python -m ruff check .` — green
-- [ ] [GATE-2a] `cd backend && python -m pytest -q` — 215 (baseline) + 9 new = 224 passing
-- [ ] [GATE-2b] `python -m ruff check scripts/`
-- [ ] [GATE-2c] `python -m pytest scripts/tests/ -q` — 19 (baseline) + 3 new = 22
+- [x] [GATE-1] `cd backend && python -m ruff check .` — green
+- [x] [GATE-2a] `cd backend && python -m pytest -q` — 215 baseline + 13 new = 228 passing
+- [x] [GATE-2b] `python -m ruff check scripts/`
+- [x] [GATE-2c] `python -m pytest scripts/tests/ -q` — 19 baseline + 5 new = 24 passing
 - [ ] [GATE-3] Manual: rebuild Docker, restart Claude Code, run a 3-turn session with a tool call. Verify `docker exec brain ls /data/raw_buffer/` shows today's file with ≥9 events (3 user + 3 assistant + ≥3 tool).
 - [ ] [GATE-4] `curl -s http://localhost:8621/storage_stats` — deferred to 2c.2; not part of 2c.1 gates.

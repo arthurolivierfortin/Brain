@@ -109,7 +109,7 @@ class RawBuffer:
                         try:
                             data = json.loads(line)
                             event = RawEvent.model_validate(data)
-                        except Exception:
+                        except (json.JSONDecodeError, ValueError):
                             continue
                         if event.timestamp >= ts:
                             out.append(event)

@@ -14,8 +14,8 @@
 - [ ] [DB-0] None
 
 ## Verification gates
-- [ ] [GATE-1] `cd backend && python -m ruff check .` passes
-- [ ] [GATE-2] `cd backend && python -m pytest -q` passes (baseline 213 → 215, no regressions)
-- [ ] [GATE-3] frontend skipped (no frontend touched)
+- [x] [GATE-1] `cd backend && python -m ruff check .` passes
+- [x] [GATE-2] `cd backend && python -m pytest -q` passes (baseline 213 → 215, no regressions)
+- [x] [GATE-3] frontend skipped (no frontend touched)
 
 **Note:** mypy is NOT a hard gate for Brain (per CLAUDE.md). Builder/judge MAY run it for advisory signal but failures don't block. Brain commit emoji: `🩹 Fix` for SPEC commits (security bug fix), `🧪 Test` for the test commit.

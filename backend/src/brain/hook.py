@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import logging
 import math
 import os
 import re
@@ -15,6 +16,8 @@ from datetime import datetime
 from typing import Any, Protocol
 
 import httpx
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @dataclass

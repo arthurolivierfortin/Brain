@@ -21,7 +21,7 @@
 
 - [x] [SPEC-7] Create `scripts/brain_post_tool.py`: stdin JSON `{tool_name, tool_input, tool_response, session_id, cwd}`. Builds `RawEvent(kind=tool_use, content=json.dumps(tool_input)[:2000], tool_name, tool_input, tool_output_excerpt=str(tool_response)[:2000], agent, session_id, project=cwd)`. Same fire-and-forget pattern. Returns `{}` exit 0.
 
-- [ ] [SPEC-8] Update `.claude/settings.json` to register `UserPromptSubmit` → `python scripts/brain_user_prompt.py` and `PostToolUse` → `python scripts/brain_post_tool.py`. Preserve existing SessionStart + Stop entries.
+- [x] [SPEC-8] Update `.claude/settings.json` to register `UserPromptSubmit` → `python scripts/brain_user_prompt.py` and `PostToolUse` → `python scripts/brain_post_tool.py`. Preserve existing SessionStart + Stop entries.
 
 - [x] [SPEC-9] Add basic redaction in `RawBuffer.append`: regex-strip `[A-Za-z0-9_-]{20,}` sequences that follow `key=`, `apikey=`, `Bearer `, `password=`, `token=`, replacing with `<redacted>`. Apply to `content` and `tool_output_excerpt` only.
 

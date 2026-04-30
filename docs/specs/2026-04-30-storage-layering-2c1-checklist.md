@@ -9,7 +9,7 @@
 
 - [x] [SPEC-1] Create `backend/src/brain/raw_buffer.py` with `RawEvent` Pydantic model (fields per spec §Backend), and a `RawBuffer` class with `__init__(root: Path)`, `append(event: RawEvent)`, `list_since(ts: datetime, limit: int = 1000)`, `rotate_if_needed()`, `purge_older_than(days: int)`. Use single-thread `queue.SimpleQueue` + dedicated daemon thread for serialized writes (no fcntl). File path: `<root>/brain_raw_buffer.YYYY-MM-DD.jsonl`. Atomic write = `f.write(json.dumps(...) + "\n")` with `f.flush()` per line.
 
-- [ ] [SPEC-2] Add `POST /raw_event` endpoint in `backend/src/brain/server.py`. Body: `RawEvent` minus `event_id` and `timestamp` (server-assigns `uuid4()` and `datetime.now(UTC)`). Returns 200 with `{event_id, timestamp}`. On `RawBuffer` exception → log warning, return 200 with `{stored: false, reason}` (never 500 — this endpoint must not block client hooks).
+- [x] [SPEC-2] Add `POST /raw_event` endpoint in `backend/src/brain/server.py`. Body: `RawEvent` minus `event_id` and `timestamp` (server-assigns `uuid4()` and `datetime.now(UTC)`). Returns 200 with `{event_id, timestamp}`. On `RawBuffer` exception → log warning, return 200 with `{stored: false, reason}` (never 500 — this endpoint must not block client hooks).
 
 - [ ] [SPEC-3] Modify `POST /hook/post_turn` in `server.py` to **also** write a `RawEvent(kind=assistant_message, content=turn.assistant, tool_use=...)` to the raw buffer BEFORE the existing Gemini extract logic. Wrap in `try/except: log.warning(...)` so failure to write raw never breaks the legacy path.
 
@@ -37,9 +37,9 @@
 
 - [x] [TEST-5] `test_raw_buffer.py::test_redaction_strips_secrets` — append event with `content="api_key=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123"`, read back, assert content contains `<redacted>` not the secret.
 
-- [ ] [TEST-6] `backend/tests/test_brain/test_raw_event_endpoint.py::test_post_raw_event_returns_200_and_writes` — TestClient, POST valid body, assert 200 + body contains `event_id`, then read raw buffer and assert event present.
+- [x] [TEST-6] `backend/tests/test_brain/test_raw_event_endpoint.py::test_post_raw_event_returns_200_and_writes` — TestClient, POST valid body, assert 200 + body contains `event_id`, then read raw buffer and assert event present.
 
-- [ ] [TEST-7] `test_raw_event_endpoint.py::test_post_raw_event_swallows_storage_failure` — monkeypatch `RawBuffer.append` to raise, POST event, assert 200 with `{stored: false}`, no exception bubbled.
+- [x] [TEST-7] `test_raw_event_endpoint.py::test_post_raw_event_swallows_storage_failure` — monkeypatch `RawBuffer.append` to raise, POST event, assert 200 with `{stored: false}`, no exception bubbled.
 
 - [ ] [TEST-8] `backend/tests/test_brain/test_post_turn_dual_write.py::test_post_turn_writes_to_raw_and_extracted` — mock GeminiFlashExtractor to return one fact, POST `/hook/post_turn` with a turn, assert: (a) one new entry in ChromaDB `memories`, (b) one new line in raw buffer with `kind=assistant_message`.
 

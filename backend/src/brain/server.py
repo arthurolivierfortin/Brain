@@ -30,6 +30,7 @@ _store: BrainStore | None = None
 _events: EventLog | None = None
 _queue: PendingQueue | None = None
 _extractor: Any = None
+_raw_buffer: Any = None
 
 
 def _get_extractor() -> Any:
@@ -65,6 +66,19 @@ def get_queue() -> PendingQueue:
     if _queue is None:
         _queue = PendingQueue()
     return _queue
+
+
+def get_raw_buffer() -> Any:
+    """Lazy singleton for the L1 RawBuffer. Path via BRAIN_RAW_BUFFER_DIR env."""
+    global _raw_buffer
+    if _raw_buffer is None:
+        import os
+
+        from brain.raw_buffer import RawBuffer
+        default = "/data/raw_buffer" if Path("/data").exists() else "data/raw_buffer"
+        root = Path(os.environ.get("BRAIN_RAW_BUFFER_DIR", default))
+        _raw_buffer = RawBuffer(root)
+    return _raw_buffer
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +415,31 @@ def create_http_app():
                     "rejected_by_gate": r.rejected_by_gate,
                     "extraction_cost_usd": r.extraction_cost_usd,
                     "extraction_ms": r.extraction_ms,
+                })
+            elif self.path == "/raw_event":
+                from datetime import UTC, datetime
+
+                from pydantic import ValidationError
+
+                from brain.raw_buffer import RawEvent
+                payload = dict(data)
+                payload.setdefault("timestamp", datetime.now(UTC).isoformat())
+                try:
+                    event = RawEvent.model_validate(payload)
+                except ValidationError as e:
+                    self._json_response({"error": "invalid_payload", "details": e.errors()}, status=400)
+                    return
+                rb = get_raw_buffer()
+                try:
+                    rb.append(event)
+                except Exception as e:
+                    logger.warning("/raw_event append failed: %s", e)
+                    self._json_response({"stored": False, "reason": str(e)})
+                    return
+                self._json_response({
+                    "stored": True,
+                    "event_id": event.event_id,
+                    "timestamp": event.timestamp.isoformat(),
                 })
             elif self.path == "/reset":
                 store = get_store()

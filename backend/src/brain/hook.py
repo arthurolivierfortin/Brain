@@ -172,7 +172,7 @@ class GeminiFlashExtractor:
 
     def extract(self, turn: Turn) -> list[ExtractedMemory]:
         prompt = self._build_prompt(turn)
-        url = f"{self._API_URL}/{self._model}:generateContent?key={self._api_key}"
+        url = f"{self._API_URL}/{self._model}:generateContent"
         try:
             resp = self._client.post(url, json={
                 "systemInstruction": {"parts": [{"text": self.SYSTEM_PROMPT}]},
@@ -182,7 +182,7 @@ class GeminiFlashExtractor:
                     "temperature": 0.3,
                     "responseMimeType": "application/json",
                 },
-            })
+            }, headers={"x-goog-api-key": self._api_key})
             resp.raise_for_status()
             data = resp.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]

@@ -15,7 +15,7 @@
 
 - [x] [SPEC-4] Add `RawBuffer` instance to `server.py`'s app state on startup (`app.state.raw_buffer = RawBuffer(Path("/data/raw_buffer"))`). Wire it into the existing `drain_thread` loop: every iteration, call `raw_buffer.rotate_if_needed()` and `raw_buffer.purge_older_than(7)`.
 
-- [ ] [SPEC-5] On server boot, run idempotent migration in `Store.__init__` (or wherever the ChromaDB collection is opened): for each entry in the `memories` collection where `metadata.storage_layer` is missing, set it to `"extracted"`. Use ChromaDB's `update` with the existing `id`. Log count `migrated=N` once.
+- [x] [SPEC-5] On server boot, run idempotent migration in `Store.__init__` (or wherever the ChromaDB collection is opened): for each entry in the `memories` collection where `metadata.storage_layer` is missing, set it to `"extracted"`. Use ChromaDB's `update` with the existing `id`. Log count `migrated=N` once.
 
 - [ ] [SPEC-6] Create `scripts/brain_user_prompt.py` mirroring `scripts/brain_post_turn.py` structure (same imports, same `BRAIN_URL` env, same `derive_agent` helper). On stdin JSON `{prompt, session_id, cwd}`: builds `RawEvent(kind=user_message, content=prompt, agent=derive_agent(cwd), session_id, project=cwd)`, POSTs to `{BRAIN_URL}/raw_event` with `timeout=0.5`. Catches every exception, returns `{}` to stdout (UserPromptSubmit hook contract). Always exit 0.
 
@@ -43,7 +43,7 @@
 
 - [x] [TEST-8] `backend/tests/test_brain/test_post_turn_dual_write.py::test_post_turn_writes_to_raw_and_extracted` — mock GeminiFlashExtractor to return one fact, POST `/hook/post_turn` with a turn, assert: (a) one new entry in ChromaDB `memories`, (b) one new line in raw buffer with `kind=assistant_message`.
 
-- [ ] [TEST-9] `backend/tests/test_brain/test_migration_storage_layer.py::test_migration_tags_unflagged_entries` — seed ChromaDB with 2 entries (no `storage_layer` metadata), call migration, assert both entries now have `storage_layer="extracted"`. Run again, assert no-op (count=0 logged).
+- [x] [TEST-9] `backend/tests/test_brain/test_migration_storage_layer.py::test_migration_tags_unflagged_entries` — seed ChromaDB with 2 entries (no `storage_layer` metadata), call migration, assert both entries now have `storage_layer="extracted"`. Run again, assert no-op (count=0 logged).
 
 - [ ] [TEST-10] `scripts/tests/test_brain_user_prompt.py::test_subprocess_posts_user_message` — captor HTTP server pattern from existing `test_brain_wake_up_l2.py`, run subprocess with stdin `{"prompt": "hello brain", "session_id": "s1", "cwd": "/x"}`, assert captor received POST to `/raw_event` with `kind=user_message`, `content="hello brain"`, then assert subprocess stdout is `{}`.
 
@@ -53,7 +53,7 @@
 
 ## Storage / Migrations
 
-- [ ] [DB-1] Idempotent ChromaDB migration on boot — covered by [SPEC-5]/[TEST-9].
+- [x] [DB-1] Idempotent ChromaDB migration on boot — covered by [SPEC-5]/[TEST-9].
 
 ## Verification gates
 

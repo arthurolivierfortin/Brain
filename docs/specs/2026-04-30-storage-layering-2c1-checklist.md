@@ -13,7 +13,7 @@
 
 - [x] [SPEC-3] Modify `POST /hook/post_turn` in `server.py` to **also** write a `RawEvent(kind=assistant_message, content=turn.assistant, tool_use=...)` to the raw buffer BEFORE the existing Gemini extract logic. Wrap in `try/except: log.warning(...)` so failure to write raw never breaks the legacy path.
 
-- [ ] [SPEC-4] Add `RawBuffer` instance to `server.py`'s app state on startup (`app.state.raw_buffer = RawBuffer(Path("/data/raw_buffer"))`). Wire it into the existing `drain_thread` loop: every iteration, call `raw_buffer.rotate_if_needed()` and `raw_buffer.purge_older_than(7)`.
+- [x] [SPEC-4] Add `RawBuffer` instance to `server.py`'s app state on startup (`app.state.raw_buffer = RawBuffer(Path("/data/raw_buffer"))`). Wire it into the existing `drain_thread` loop: every iteration, call `raw_buffer.rotate_if_needed()` and `raw_buffer.purge_older_than(7)`.
 
 - [ ] [SPEC-5] On server boot, run idempotent migration in `Store.__init__` (or wherever the ChromaDB collection is opened): for each entry in the `memories` collection where `metadata.storage_layer` is missing, set it to `"extracted"`. Use ChromaDB's `update` with the existing `id`. Log count `migrated=N` once.
 

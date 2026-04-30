@@ -486,7 +486,7 @@ def create_http_app():
 # ---------------------------------------------------------------------------
 
 def _drain_loop(interval: int = 60) -> None:
-    """Background thread that periodically drains the pending queue."""
+    """Background thread that periodically drains the pending queue and rotates raw buffer."""
     import time
 
     while True:
@@ -500,6 +500,14 @@ def _drain_loop(interval: int = 60) -> None:
                     logger.info("Background drain: %s", result)
         except Exception as e:
             logger.warning("Background drain failed: %s", e)
+        try:
+            rb = get_raw_buffer()
+            rb.rotate_if_needed()
+            purged = rb.purge_older_than(7)
+            if purged > 0:
+                logger.info("Raw buffer purged %d expired day-files", purged)
+        except Exception as e:
+            logger.warning("Raw buffer maintenance failed: %s", e)
 
 
 def main():
@@ -511,6 +519,11 @@ def main():
     # Initialize store eagerly
     store = get_store()
     logger.info("Brain store initialized: %d entries", store._collection.count())
+
+    # Initialize raw buffer eagerly (L1 layer, Phase 2c.1)
+    rb = get_raw_buffer()
+    rb.rotate_if_needed()
+    logger.info("Raw buffer initialized at %s", rb._root)
 
     # Drain any pending entries from previous crash/restart
     queue = get_queue()

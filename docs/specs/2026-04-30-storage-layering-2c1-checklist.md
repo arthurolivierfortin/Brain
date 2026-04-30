@@ -19,7 +19,7 @@
 
 - [x] [SPEC-6] Create `scripts/brain_user_prompt.py` mirroring `scripts/brain_post_turn.py` structure (same imports, same `BRAIN_URL` env, same `derive_agent` helper). On stdin JSON `{prompt, session_id, cwd}`: builds `RawEvent(kind=user_message, content=prompt, agent=derive_agent(cwd), session_id, project=cwd)`, POSTs to `{BRAIN_URL}/raw_event` with `timeout=0.5`. Catches every exception, returns `{}` to stdout (UserPromptSubmit hook contract). Always exit 0.
 
-- [ ] [SPEC-7] Create `scripts/brain_post_tool.py`: stdin JSON `{tool_name, tool_input, tool_response, session_id, cwd}`. Builds `RawEvent(kind=tool_use, content=json.dumps(tool_input)[:2000], tool_name, tool_input, tool_output_excerpt=str(tool_response)[:2000], agent, session_id, project=cwd)`. Same fire-and-forget pattern. Returns `{}` exit 0.
+- [x] [SPEC-7] Create `scripts/brain_post_tool.py`: stdin JSON `{tool_name, tool_input, tool_response, session_id, cwd}`. Builds `RawEvent(kind=tool_use, content=json.dumps(tool_input)[:2000], tool_name, tool_input, tool_output_excerpt=str(tool_response)[:2000], agent, session_id, project=cwd)`. Same fire-and-forget pattern. Returns `{}` exit 0.
 
 - [ ] [SPEC-8] Update `.claude/settings.json` to register `UserPromptSubmit` → `python scripts/brain_user_prompt.py` and `PostToolUse` → `python scripts/brain_post_tool.py`. Preserve existing SessionStart + Stop entries.
 
@@ -49,7 +49,7 @@
 
 - [x] [TEST-11] `scripts/tests/test_brain_user_prompt.py::test_subprocess_silent_on_brain_down` — set `BRAIN_URL=http://127.0.0.1:1` (unreachable), run subprocess, assert exit 0 and stdout `{}` (NEVER blocks user input).
 
-- [ ] [TEST-12] `scripts/tests/test_brain_post_tool.py::test_subprocess_posts_tool_use_with_excerpt` — captor pattern, stdin `{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":"a\nb\nc","session_id":"s1","cwd":"/x"}`, assert captor received `kind=tool_use`, `tool_name=Bash`, `tool_output_excerpt` contains "a\nb\nc".
+- [x] [TEST-12] `scripts/tests/test_brain_post_tool.py::test_subprocess_posts_tool_use_with_excerpt` — captor pattern, stdin `{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":"a\nb\nc","session_id":"s1","cwd":"/x"}`, assert captor received `kind=tool_use`, `tool_name=Bash`, `tool_output_excerpt` contains "a\nb\nc".
 
 ## Storage / Migrations
 

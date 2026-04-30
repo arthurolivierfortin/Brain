@@ -39,3 +39,15 @@ def test_extract_uses_header_auth_not_query_param() -> None:
     assert headers.get("x-goog-api-key") == api_key, (
         f"Expected header x-goog-api-key={api_key!r}, got headers={headers}"
     )
+
+
+import logging
+
+
+def test_httpx_logger_level_is_warning() -> None:
+    """SPEC-2: importing brain.hook must suppress httpx INFO URL logs."""
+    import brain.hook  # noqa: F401 — side-effect import triggers module-top setLevel
+    assert logging.getLogger("httpx").level == logging.WARNING, (
+        f"Expected httpx logger level WARNING ({logging.WARNING}), "
+        f"got {logging.getLogger('httpx').level}"
+    )

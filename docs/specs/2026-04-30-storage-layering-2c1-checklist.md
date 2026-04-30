@@ -7,7 +7,7 @@
 
 ## Code
 
-- [ ] [SPEC-1] Create `backend/src/brain/raw_buffer.py` with `RawEvent` Pydantic model (fields per spec §Backend), and a `RawBuffer` class with `__init__(root: Path)`, `append(event: RawEvent)`, `list_since(ts: datetime, limit: int = 1000)`, `rotate_if_needed()`, `purge_older_than(days: int)`. Use single-thread `queue.SimpleQueue` + dedicated daemon thread for serialized writes (no fcntl). File path: `<root>/brain_raw_buffer.YYYY-MM-DD.jsonl`. Atomic write = `f.write(json.dumps(...) + "\n")` with `f.flush()` per line.
+- [x] [SPEC-1] Create `backend/src/brain/raw_buffer.py` with `RawEvent` Pydantic model (fields per spec §Backend), and a `RawBuffer` class with `__init__(root: Path)`, `append(event: RawEvent)`, `list_since(ts: datetime, limit: int = 1000)`, `rotate_if_needed()`, `purge_older_than(days: int)`. Use single-thread `queue.SimpleQueue` + dedicated daemon thread for serialized writes (no fcntl). File path: `<root>/brain_raw_buffer.YYYY-MM-DD.jsonl`. Atomic write = `f.write(json.dumps(...) + "\n")` with `f.flush()` per line.
 
 - [ ] [SPEC-2] Add `POST /raw_event` endpoint in `backend/src/brain/server.py`. Body: `RawEvent` minus `event_id` and `timestamp` (server-assigns `uuid4()` and `datetime.now(UTC)`). Returns 200 with `{event_id, timestamp}`. On `RawBuffer` exception → log warning, return 200 with `{stored: false, reason}` (never 500 — this endpoint must not block client hooks).
 
@@ -23,19 +23,19 @@
 
 - [ ] [SPEC-8] Update `.claude/settings.json` to register `UserPromptSubmit` → `python scripts/brain_user_prompt.py` and `PostToolUse` → `python scripts/brain_post_tool.py`. Preserve existing SessionStart + Stop entries.
 
-- [ ] [SPEC-9] Add basic redaction in `RawBuffer.append`: regex-strip `[A-Za-z0-9_-]{20,}` sequences that follow `key=`, `apikey=`, `Bearer `, `password=`, `token=`, replacing with `<redacted>`. Apply to `content` and `tool_output_excerpt` only.
+- [x] [SPEC-9] Add basic redaction in `RawBuffer.append`: regex-strip `[A-Za-z0-9_-]{20,}` sequences that follow `key=`, `apikey=`, `Bearer `, `password=`, `token=`, replacing with `<redacted>`. Apply to `content` and `tool_output_excerpt` only.
 
 ## Tests
 
-- [ ] [TEST-1] `backend/tests/test_brain/test_raw_buffer.py::test_append_writes_jsonl_line` — create `RawBuffer(tmp_path)`, append one event, assert file `tmp_path/brain_raw_buffer.YYYY-MM-DD.jsonl` exists with exactly one valid JSON line containing the event fields.
+- [x] [TEST-1] `backend/tests/test_brain/test_raw_buffer.py::test_append_writes_jsonl_line` — create `RawBuffer(tmp_path)`, append one event, assert file `tmp_path/brain_raw_buffer.YYYY-MM-DD.jsonl` exists with exactly one valid JSON line containing the event fields.
 
-- [ ] [TEST-2] `test_raw_buffer.py::test_list_since_filters_by_timestamp` — append 5 events spaced 1 minute apart (use `freezegun` or pass timestamps explicitly), call `list_since(ts=event3.timestamp)`, assert returns events 3, 4, 5 only.
+- [x] [TEST-2] `test_raw_buffer.py::test_list_since_filters_by_timestamp` — append 5 events spaced 1 minute apart (use `freezegun` or pass timestamps explicitly), call `list_since(ts=event3.timestamp)`, assert returns events 3, 4, 5 only.
 
-- [ ] [TEST-3] `test_raw_buffer.py::test_rotate_if_needed_creates_new_file_at_midnight` — patch `datetime.now` to one date, append, then patch to next day, call `rotate_if_needed()`, append again, assert two distinct files exist.
+- [x] [TEST-3] `test_raw_buffer.py::test_rotate_if_needed_creates_new_file_at_midnight` — patch `datetime.now` to one date, append, then patch to next day, call `rotate_if_needed()`, append again, assert two distinct files exist.
 
-- [ ] [TEST-4] `test_raw_buffer.py::test_purge_older_than_drops_old_files` — create three day-files manually (`brain_raw_buffer.2026-04-20.jsonl` through `.04-30.jsonl`), call `purge_older_than(7)` with `now=2026-04-30`, assert files older than 7 days are deleted, returns count=2 (assuming `2026-04-20` and `2026-04-21` are both >7d old).
+- [x] [TEST-4] `test_raw_buffer.py::test_purge_older_than_drops_old_files` — create three day-files manually (`brain_raw_buffer.2026-04-20.jsonl` through `.04-30.jsonl`), call `purge_older_than(7)` with `now=2026-04-30`, assert files older than 7 days are deleted, returns count=2 (assuming `2026-04-20` and `2026-04-21` are both >7d old).
 
-- [ ] [TEST-5] `test_raw_buffer.py::test_redaction_strips_secrets` — append event with `content="api_key=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123"`, read back, assert content contains `<redacted>` not the secret.
+- [x] [TEST-5] `test_raw_buffer.py::test_redaction_strips_secrets` — append event with `content="api_key=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123"`, read back, assert content contains `<redacted>` not the secret.
 
 - [ ] [TEST-6] `backend/tests/test_brain/test_raw_event_endpoint.py::test_post_raw_event_returns_200_and_writes` — TestClient, POST valid body, assert 200 + body contains `event_id`, then read raw buffer and assert event present.
 

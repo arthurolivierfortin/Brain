@@ -12,7 +12,7 @@
 Promoted from "improvements" 2026-04-30 after dogfood revealed Gemini-filter-at-ingest drops too many facts. User confirmed initial mental model was always "L1 stocks everything raw, higher layers filter". Closes the discordance documented in [data/brainstorm-storage-layering.md](../data/brainstorm-storage-layering.md).
 
 Phasing:
-- [ ] 2c.1 — Raw buffer (L1) + multi-hook capture (UserPromptSubmit + PostToolUse + dual-write at Stop) — issue #40, spec [docs/specs/2026-04-30-storage-layering-2c1-design.md](specs/2026-04-30-storage-layering-2c1-design.md)
+- [x] 2c.1 — Raw buffer (L1) + multi-hook capture (UserPromptSubmit + PostToolUse + dual-write at Stop) — issue #40, PR #41 (merged 2026-04-30, +18 tests, raw buffer live in prod)
 - [ ] 2c.2 — Hourly consolidation cron (L1 raw → L2 extracted via batched Gemini with cumulative context)
 - [ ] 2c.3 — L3 consolidated layer (reinforcement OR survival promotion)
 - [ ] 2c.4 — Monitor visualization (color=type, opacity=maturity, ring=retrieval-tag)

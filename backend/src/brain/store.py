@@ -37,7 +37,7 @@ RESERVED_META_KEYS: frozenset[str] = frozenset({
     "agent", "memory_type", "created_at", "access_count", "confidence",
     "sentiment", "level", "symbols", "strategies", "concepts", "links",
     "source", "dedup_key", "superseded", "consolidated_into", "superseded_by",
-    "occurrence_count", "event_type",
+    "occurrence_count", "event_type", "storage_layer",
 })
 
 # Reserved keys that the caller IS allowed to override via metadata=.
@@ -77,6 +77,46 @@ class BrainStore:
         self._gate = BrainGate()
         self._events = event_log or EventLog()
         self._graph: object | None = None  # Lazy-loaded KnowledgeGraph
+
+        # Phase 2c.1: idempotent migration tagging legacy entries as "extracted".
+        try:
+            n = self.migrate_storage_layer()
+            if n > 0:
+                logger.info("Migration: tagged %d entries with storage_layer=extracted", n)
+        except Exception as e:
+            logger.warning("storage_layer migration failed: %s", e)
+
+    def migrate_storage_layer(self) -> int:
+        """Idempotent: tag entries lacking storage_layer with 'extracted'.
+
+        Returns the number of entries updated. Safe to call repeatedly.
+        """
+        if self._collection.count() == 0:
+            return 0
+        try:
+            raw = self._collection.get(include=["metadatas"])
+        except Exception as e:
+            logger.warning("migrate_storage_layer fetch failed: %s", e)
+            return 0
+        ids = raw.get("ids") or []
+        metas = raw.get("metadatas") or []
+        to_update_ids: list[str] = []
+        to_update_metas: list[dict] = []
+        for i, meta in enumerate(metas):
+            meta = meta or {}
+            if "storage_layer" in meta and meta["storage_layer"]:
+                continue
+            new_meta = {**meta, "storage_layer": "extracted"}
+            to_update_ids.append(ids[i])
+            to_update_metas.append(new_meta)
+        if not to_update_ids:
+            return 0
+        try:
+            self._collection.update(ids=to_update_ids, metadatas=to_update_metas)
+        except Exception as e:
+            logger.warning("migrate_storage_layer update failed: %s", e)
+            return 0
+        return len(to_update_ids)
 
     def _get_graph(self):
         """Build or return cached knowledge graph."""

@@ -1,13 +1,25 @@
 # Brain — STATUS
 
-**Updated:** 2026-04-27
-**Current phase:** R:phase-2b (Hook architecture — MVP, dogfood-ready)
+**Updated:** 2026-04-30
+**Current phase:** R:phase-2c (Storage layering — raw buffer + consolidation)
 
 > Source-of-truth roadmap lives in [README.md](../README.md#roadmap). This file is the machine-parseable handle that `/cycle`, `/cycle-start`, `/plan`, and `/status` read.
 
 ## Current phase
 
-`R:phase-2b` — Hook architecture + Brain monitor
+`R:phase-2c` — Storage layering (cerveau-style: raw buffer → extracted → consolidated)
+
+Promoted from "improvements" 2026-04-30 after dogfood revealed Gemini-filter-at-ingest drops too many facts. User confirmed initial mental model was always "L1 stocks everything raw, higher layers filter". Closes the discordance documented in [data/brainstorm-storage-layering.md](../data/brainstorm-storage-layering.md).
+
+Phasing:
+- [ ] 2c.1 — Raw buffer (L1) + multi-hook capture (UserPromptSubmit + PostToolUse + dual-write at Stop) — issue #40, spec [docs/specs/2026-04-30-storage-layering-2c1-design.md](specs/2026-04-30-storage-layering-2c1-design.md)
+- [ ] 2c.2 — Hourly consolidation cron (L1 raw → L2 extracted via batched Gemini with cumulative context)
+- [ ] 2c.3 — L3 consolidated layer (reinforcement OR survival promotion)
+- [ ] 2c.4 — Monitor visualization (color=type, opacity=maturity, ring=retrieval-tag)
+
+## Phase 2b — completed
+
+`R:phase-2b` — Hook architecture + Brain monitor (closed 2026-04-30)
 
 Brain monitor (3 PRs, 3 phases) shipped 2026-04-27:
 - [x] Phase 1 — skeleton + vitals (#16, PR #20)
@@ -22,8 +34,9 @@ L2/L3 layering shipped 2026-04-28:
 Brain monitor fidelity pass shipped 2026-04-28:
 - [x] Monitor fidelity (#30, PR #31) — htop tabs in header, agent dropdown, L2 badge, layer rings on graph nodes, animation system, memory_type co-occurrence matrix, hash router (#/memory/, #/hook/, #/agent/), drawer inspectors with j/k navigation
 
-Remaining deliverables for phase 2b:
-- [ ] Dogfood hook architecture + monitor on Brain sessions for ≥7 days, verify cerveau-parfait effect (open `http://localhost:8621/monitor` while Brain runs — requires Docker rebuild after each merge)
+Phase 2b dogfood folded into 2c.1 build (the storage layering work IS the dogfood signal — 2c.1 ships, we observe how L1 fills up, calibrates 2c.2's consolidation cadence).
+
+Phase 2b monitor regressions fixed 2026-04-30 (PR #39): graph drift, tweaks panel removal, drawer overlay, mockup-fidelity bars + force-directed sim ported from tmp/BrainV2/brain-graph.jsx.
 
 All other phase 2b deliverables checked off in README.md.
 
@@ -36,7 +49,7 @@ All other phase 2b deliverables checked off in README.md.
 
 ## Phase pipeline (next)
 
-After 2b dogfood completes:
+After 2c completes:
 - `R:phase-3` — Installer (`npx brain`)
 - `R:phase-2-extended` — 29-tool MCP surface (parallel-able with 3)
 - `R:phase-4` — Frontend (Next.js, memory browser, graph viz, live stream)

@@ -30,6 +30,7 @@ _store: BrainStore | None = None
 _events: EventLog | None = None
 _queue: PendingQueue | None = None
 _extractor: Any = None
+_raw_buffer: Any = None
 
 
 def _get_extractor() -> Any:
@@ -65,6 +66,19 @@ def get_queue() -> PendingQueue:
     if _queue is None:
         _queue = PendingQueue()
     return _queue
+
+
+def get_raw_buffer() -> Any:
+    """Lazy singleton for the L1 RawBuffer. Path via BRAIN_RAW_BUFFER_DIR env."""
+    global _raw_buffer
+    if _raw_buffer is None:
+        import os
+
+        from brain.raw_buffer import RawBuffer
+        default = "/data/raw_buffer" if Path("/data").exists() else "data/raw_buffer"
+        root = Path(os.environ.get("BRAIN_RAW_BUFFER_DIR", default))
+        _raw_buffer = RawBuffer(root)
+    return _raw_buffer
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +408,25 @@ def create_http_app():
                     assistant=turn_data.get("assistant", ""),
                     tool_calls=turn_data.get("tool_calls", []),
                 )
+
+                # Dual-write: L1 raw assistant_message before extraction.
+                try:
+                    from datetime import UTC, datetime
+
+                    from brain.raw_buffer import RawEvent
+                    rb = get_raw_buffer()
+                    rb.append(RawEvent(
+                        timestamp=datetime.now(UTC),
+                        kind="assistant_message",
+                        agent=agent,
+                        session_id=req.session_id,
+                        project=req.project,
+                        content=turn.assistant,
+                        metadata={"tool_calls": turn.tool_calls} if turn.tool_calls else {},
+                    ))
+                except Exception as e:
+                    logger.warning("Raw buffer dual-write failed (non-fatal): %s", e)
+
                 handler = PostTurnHandler(store, extractor, events)
                 r = handler.handle(req, turn)
                 self._json_response({
@@ -401,6 +434,31 @@ def create_http_app():
                     "rejected_by_gate": r.rejected_by_gate,
                     "extraction_cost_usd": r.extraction_cost_usd,
                     "extraction_ms": r.extraction_ms,
+                })
+            elif self.path == "/raw_event":
+                from datetime import UTC, datetime
+
+                from pydantic import ValidationError
+
+                from brain.raw_buffer import RawEvent
+                payload = dict(data)
+                payload.setdefault("timestamp", datetime.now(UTC).isoformat())
+                try:
+                    event = RawEvent.model_validate(payload)
+                except ValidationError as e:
+                    self._json_response({"error": "invalid_payload", "details": e.errors()}, status=400)
+                    return
+                rb = get_raw_buffer()
+                try:
+                    rb.append(event)
+                except Exception as e:
+                    logger.warning("/raw_event append failed: %s", e)
+                    self._json_response({"stored": False, "reason": str(e)})
+                    return
+                self._json_response({
+                    "stored": True,
+                    "event_id": event.event_id,
+                    "timestamp": event.timestamp.isoformat(),
                 })
             elif self.path == "/reset":
                 store = get_store()
@@ -428,7 +486,7 @@ def create_http_app():
 # ---------------------------------------------------------------------------
 
 def _drain_loop(interval: int = 60) -> None:
-    """Background thread that periodically drains the pending queue."""
+    """Background thread that periodically drains the pending queue and rotates raw buffer."""
     import time
 
     while True:
@@ -442,6 +500,14 @@ def _drain_loop(interval: int = 60) -> None:
                     logger.info("Background drain: %s", result)
         except Exception as e:
             logger.warning("Background drain failed: %s", e)
+        try:
+            rb = get_raw_buffer()
+            rb.rotate_if_needed()
+            purged = rb.purge_older_than(7)
+            if purged > 0:
+                logger.info("Raw buffer purged %d expired day-files", purged)
+        except Exception as e:
+            logger.warning("Raw buffer maintenance failed: %s", e)
 
 
 def main():
@@ -453,6 +519,11 @@ def main():
     # Initialize store eagerly
     store = get_store()
     logger.info("Brain store initialized: %d entries", store._collection.count())
+
+    # Initialize raw buffer eagerly (L1 layer, Phase 2c.1)
+    rb = get_raw_buffer()
+    rb.rotate_if_needed()
+    logger.info("Raw buffer initialized at %s", rb._root)
 
     # Drain any pending entries from previous crash/restart
     queue = get_queue()

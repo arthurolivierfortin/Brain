@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from unittest.mock import MagicMock
 
 from brain.hook import GeminiFlashExtractor, Turn
@@ -39,9 +40,6 @@ def test_extract_uses_header_auth_not_query_param() -> None:
     assert headers.get("x-goog-api-key") == api_key, (
         f"Expected header x-goog-api-key={api_key!r}, got headers={headers}"
     )
-
-
-import logging
 
 
 def test_httpx_logger_level_is_warning() -> None:

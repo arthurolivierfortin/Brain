@@ -11,7 +11,7 @@
 
 - [x] [SPEC-2] Add `POST /raw_event` endpoint in `backend/src/brain/server.py`. Body: `RawEvent` minus `event_id` and `timestamp` (server-assigns `uuid4()` and `datetime.now(UTC)`). Returns 200 with `{event_id, timestamp}`. On `RawBuffer` exception → log warning, return 200 with `{stored: false, reason}` (never 500 — this endpoint must not block client hooks).
 
-- [ ] [SPEC-3] Modify `POST /hook/post_turn` in `server.py` to **also** write a `RawEvent(kind=assistant_message, content=turn.assistant, tool_use=...)` to the raw buffer BEFORE the existing Gemini extract logic. Wrap in `try/except: log.warning(...)` so failure to write raw never breaks the legacy path.
+- [x] [SPEC-3] Modify `POST /hook/post_turn` in `server.py` to **also** write a `RawEvent(kind=assistant_message, content=turn.assistant, tool_use=...)` to the raw buffer BEFORE the existing Gemini extract logic. Wrap in `try/except: log.warning(...)` so failure to write raw never breaks the legacy path.
 
 - [ ] [SPEC-4] Add `RawBuffer` instance to `server.py`'s app state on startup (`app.state.raw_buffer = RawBuffer(Path("/data/raw_buffer"))`). Wire it into the existing `drain_thread` loop: every iteration, call `raw_buffer.rotate_if_needed()` and `raw_buffer.purge_older_than(7)`.
 
@@ -41,7 +41,7 @@
 
 - [x] [TEST-7] `test_raw_event_endpoint.py::test_post_raw_event_swallows_storage_failure` — monkeypatch `RawBuffer.append` to raise, POST event, assert 200 with `{stored: false}`, no exception bubbled.
 
-- [ ] [TEST-8] `backend/tests/test_brain/test_post_turn_dual_write.py::test_post_turn_writes_to_raw_and_extracted` — mock GeminiFlashExtractor to return one fact, POST `/hook/post_turn` with a turn, assert: (a) one new entry in ChromaDB `memories`, (b) one new line in raw buffer with `kind=assistant_message`.
+- [x] [TEST-8] `backend/tests/test_brain/test_post_turn_dual_write.py::test_post_turn_writes_to_raw_and_extracted` — mock GeminiFlashExtractor to return one fact, POST `/hook/post_turn` with a turn, assert: (a) one new entry in ChromaDB `memories`, (b) one new line in raw buffer with `kind=assistant_message`.
 
 - [ ] [TEST-9] `backend/tests/test_brain/test_migration_storage_layer.py::test_migration_tags_unflagged_entries` — seed ChromaDB with 2 entries (no `storage_layer` metadata), call migration, assert both entries now have `storage_layer="extracted"`. Run again, assert no-op (count=0 logged).
 

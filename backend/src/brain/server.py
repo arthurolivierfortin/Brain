@@ -408,6 +408,25 @@ def create_http_app():
                     assistant=turn_data.get("assistant", ""),
                     tool_calls=turn_data.get("tool_calls", []),
                 )
+
+                # Dual-write: L1 raw assistant_message before extraction.
+                try:
+                    from datetime import UTC, datetime
+
+                    from brain.raw_buffer import RawEvent
+                    rb = get_raw_buffer()
+                    rb.append(RawEvent(
+                        timestamp=datetime.now(UTC),
+                        kind="assistant_message",
+                        agent=agent,
+                        session_id=req.session_id,
+                        project=req.project,
+                        content=turn.assistant,
+                        metadata={"tool_calls": turn.tool_calls} if turn.tool_calls else {},
+                    ))
+                except Exception as e:
+                    logger.warning("Raw buffer dual-write failed (non-fatal): %s", e)
+
                 handler = PostTurnHandler(store, extractor, events)
                 r = handler.handle(req, turn)
                 self._json_response({

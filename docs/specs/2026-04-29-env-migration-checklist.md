@@ -22,8 +22,8 @@ _(none — config/docs only, manual smoke documented in preamble above)_
 - [ ] [DB-0] None
 
 ## Verification gates
-- [ ] [GATE-1] `cd backend && python -m ruff check .` passes (no Python touched — expected trivially green; run as no-regression confirmation)
-- [ ] [GATE-2] `cd backend && python -m pytest -q` passes — 215 tests green, no regression
+- [x] [GATE-1] `cd backend && python -m ruff check .` passes (no Python touched — expected trivially green; run as no-regression confirmation)
+- [x] [GATE-2] `cd backend && python -m pytest -q` passes — 215 tests green, no regression
 
 > [GATE-3] frontend skipped — no frontend code touched.
 

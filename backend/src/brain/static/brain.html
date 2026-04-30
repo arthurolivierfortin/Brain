@@ -149,117 +149,145 @@
     }
 
     // ── Bar component ─────────────────────────────────────────────────────────────
-    function Bar({ label, value, max, color, redZone }) {
-      const pct = Math.min(1, value / Math.max(max, 1));
+    // htop-style ASCII meter [||||----]. width = char count.
+    function Bar({ label, value, max, color, width = 14, redZone, suffix }) {
+      const pct = Math.max(0, Math.min(1, value / Math.max(max, 1)));
+      const filled = Math.max(0, Math.min(width, Math.round(pct * width)));
+      const empty = width - filled;
       const isRed = redZone && value > redZone;
+      const barColor = isRed ? "var(--err)" : color;
       return (
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
-          <span style={{ width: "90px", textAlign: "right", color: "var(--fg)", opacity: 0.7 }}>{label}</span>
-          <div style={{ flex: 1, height: "10px", background: "rgba(255,255,255,0.07)", borderRadius: "2px" }}>
-            <div style={{
-              width: `${(pct * 100).toFixed(1)}%`,
-              height: "100%",
-              background: isRed ? "var(--err)" : color,
-              borderRadius: "2px",
-              transition: "width 0.4s",
-            }} />
-          </div>
-          <span style={{ width: "40px", fontSize: "11px", opacity: 0.8 }}>
-            {(pct * 100).toFixed(0)}%
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", lineHeight: 1.4 }}>
+          {label && (
+            <span style={{ color: "var(--dim)", width: "44px", flexShrink: 0 }}>{label}</span>
+          )}
+          <span style={{ fontFamily: "var(--font)", whiteSpace: "pre", letterSpacing: "1px" }}>
+            <span style={{ color: "var(--dim)", opacity: 0.6 }}>[</span>
+            <span style={{ color: barColor }}>{"|".repeat(filled)}</span>
+            <span style={{ color: "var(--dim)", opacity: 0.4 }}>{"-".repeat(empty)}</span>
+            <span style={{ color: "var(--dim)", opacity: 0.6 }}>]</span>
+          </span>
+          <span style={{ color: "var(--dim)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+            {suffix ?? `${(pct * 100).toFixed(0)}%`}
           </span>
         </div>
       );
     }
 
     // ── Header ────────────────────────────────────────────────────────────────────
-    function Header({ stats, queue, lastError, startMs, buckets, events, tab, setTab, tweaks, setTweaks }) {
-      const types = Object.entries(stats?.types ?? {})
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 8);
-      const extra = Object.keys(stats?.types ?? {}).length - 8;
+    function Header({ stats, queue, lastError, startMs, buckets, events, tab, setTab, agentFilter, setAgentFilter }) {
       const total = stats?.total ?? 0;
+      const cores = Object.entries(stats?.types ?? {})
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 4);
+
+      const memUsed = total;
+      const memMax = Math.max(1024, total * 1.5 || 1024);
+      const swapValue = queue?.pending ?? 0;
 
       const eventsLast60s = (events ?? []).filter(
         e => Date.now() - new Date(e.timestamp).getTime() < 60000
       );
 
+      const lastWakeUp = (events ?? []).find(e => e.event_type === 'hook_wake_up');
+      const l2Count = lastWakeUp?.metadata?.memory_ids?.L2?.length ?? 0;
+      const l2Clickable = l2Count > 0 && lastWakeUp?.event_id;
+
+      const coreColors = ["var(--accent)", "var(--mem)", "var(--swap)", "var(--ok)"];
+
       return (
         <header className="header-row" style={{
-          padding: "10px 16px",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           background: "rgba(255,255,255,0.02)",
-          display: "flex",
-          gap: "24px",
-          alignItems: "flex-start",
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          alignItems: "stretch",
         }}>
-          {/* LEFT: cluster cores + mem/swap */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ marginBottom: "6px" }}>
-              {types.map(([type, count]) => (
-                <Bar
-                  key={type}
-                  label={type}
-                  value={count}
-                  max={total || 1}
-                  color="var(--accent)"
-                />
-              ))}
-              {extra > 0 && (
-                <div style={{ fontSize: "11px", opacity: 0.5, paddingLeft: "96px" }}>+{extra} more types</div>
-              )}
-            </div>
-            <Bar label="mem" value={total} max={16384} color="var(--mem)" />
-            <Bar label="swap" value={queue?.pending ?? 0} max={100} color="var(--swap)" redZone={100} />
+          {/* LEFT: htop-style core meters + mem + swap */}
+          <div style={{
+            padding: "8px 14px",
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            columnGap: "20px",
+            rowGap: "3px",
+          }}>
+            {cores.map(([type, count], i) => (
+              <Bar
+                key={type}
+                label={type.slice(0, 4)}
+                value={count}
+                max={total || 1}
+                color={coreColors[i % coreColors.length]}
+                width={16}
+                suffix={`${count}`}
+              />
+            ))}
+            <Bar
+              label="mem"
+              value={memUsed}
+              max={memMax}
+              color="var(--mem)"
+              width={36}
+              suffix={`${memUsed} / ${memMax}`}
+            />
+            <Bar
+              label="swap"
+              value={swapValue}
+              max={100}
+              color="var(--swap)"
+              width={36}
+              redZone={100}
+              suffix={`${swapValue} pending`}
+            />
           </div>
 
-          {/* RIGHT: identity + stats + tabs + status */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", flexShrink: 0 }}>
+          {/* RIGHT: identity + stats + tabs */}
+          <div style={{
+            padding: "8px 14px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "4px",
+            borderLeft: "1px solid rgba(255,255,255,0.08)",
+            minWidth: "320px",
+          }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ color: "var(--accent)", fontWeight: "bold", letterSpacing: "0.05em" }}>brain</span>
-              <span style={{ color: "var(--dim)", fontSize: "11px" }}>v0.2 · pid 1</span>
-            </div>
-            {(() => {
-              const lastWakeUp = (events ?? []).find(e => e.event_type === 'hook_wake_up');
-              const l2Count = lastWakeUp?.metadata?.memory_ids?.L2?.length ?? 0;
-              const clickable = l2Count > 0 && lastWakeUp?.event_id;
-              return (
-                <span
-                  style={{
-                    padding: "1px 6px",
-                    borderRadius: "3px",
-                    background: l2Count > 0 ? "var(--l2)" : "rgba(255,255,255,0.05)",
-                    color: l2Count > 0 ? "#000" : "var(--dim)",
-                    cursor: clickable ? "pointer" : "default",
-                    fontSize: "11px",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                  onClick={() => {
-                    if (clickable) window.location.hash = '#/hook/' + lastWakeUp.event_id;
-                  }}
-                >
-                  L2: {l2Count}
-                </span>
-              );
-            })()}
-            <div style={{ fontSize: "11px", color: "var(--dim)" }}>
-              up {formatUptime(startMs)} · thoughts {(events ?? []).length} · evt/s {(eventsLast60s.length / 60).toFixed(1)}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <ActivitySparkline buckets={buckets} />
               <span style={{
                 width: "8px", height: "8px", borderRadius: "50%",
                 background: lastError ? "var(--err)" : "var(--ok)",
-                display: "inline-block",
               }} title={lastError ?? "ok"} />
+              <span style={{ color: "var(--fg)", fontWeight: 600, letterSpacing: "1px" }}>brain</span>
+              <span style={{ color: "var(--dim)", fontSize: "11px" }}>v0.2</span>
+              <span style={{ color: "var(--dim)" }}>·</span>
+              <span style={{ color: "var(--accent)", fontSize: "11px" }}>pid 1</span>
+              {l2Count > 0 && (
+                <span
+                  onClick={() => { if (l2Clickable) window.location.hash = '#/hook/' + lastWakeUp.event_id; }}
+                  style={{
+                    padding: "1px 6px",
+                    borderRadius: "3px",
+                    background: "var(--l2)",
+                    color: "#000",
+                    cursor: l2Clickable ? "pointer" : "default",
+                    fontSize: "10px",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >L2: {l2Count}</span>
+              )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
-              <span style={{ color: "var(--dim)" }}>agent:</span>
+            <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: "var(--dim)", fontVariantNumeric: "tabular-nums" }}>
+              <span>up <span style={{ color: "var(--fg)" }}>{formatUptime(startMs)}</span></span>
+              <span>thoughts <span style={{ color: "var(--fg)" }}>{(events ?? []).length}</span></span>
+              <span>evt/s <span style={{ color: "var(--fg)" }}>{(eventsLast60s.length / 60).toFixed(1)}</span></span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <ActivitySparkline buckets={buckets} />
               <select
-                value={tweaks?.agentFilter ?? 'all'}
-                onChange={e => setTweaks(t => ({ ...t, agentFilter: e.target.value }))}
-                style={{ background: "#222", color: "var(--fg)", border: "1px solid rgba(255,255,255,0.15)", fontFamily: "inherit", fontSize: "11px", padding: "1px 4px" }}
+                value={agentFilter}
+                onChange={e => setAgentFilter(e.target.value)}
+                style={{ background: "#08090d", color: "var(--fg)", border: "1px solid rgba(255,255,255,0.15)", fontFamily: "inherit", fontSize: "10px", padding: "1px 4px" }}
               >
-                {['all', ...new Set((events ?? []).map(e => e.agent).filter(Boolean))].sort().map(a => (
+                {Array.from(new Set(['all', ...(events ?? []).map(e => e.agent).filter(Boolean)])).sort().map(a => (
                   <option key={a} value={a}>{a}</option>
                 ))}
               </select>
@@ -338,101 +366,7 @@
       );
     }
 
-    // ── TweaksPanel ────────────────────────────────────────────────────────────────
-    const TWEAK_DEFAULTS = { accent: '#6fd6c9', speed: 1, running: true, tab: 'graph', animations: true, agentFilter: 'all', matrixSubview: 'types' };
-    const STORAGE_KEY = 'brain-monitor-tweaks-v1';
     const ANIM_CAP = 20;
-    let warnedAboutStorage = false;
-
-    function readStoredTweaks(defaults) {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return defaults;
-        const parsed = JSON.parse(raw);
-        return { ...defaults, ...parsed };
-      } catch (err) {
-        if (!warnedAboutStorage) {
-          console.warn('[brain-monitor] localStorage unavailable; tweaks will not persist this session');
-          warnedAboutStorage = true;
-        }
-        return defaults;
-      }
-    }
-
-    function useTweaks(defaults) {
-      const [tweaks, setTweaksRaw] = useState(() => readStoredTweaks(defaults));
-      const setTweaks = React.useCallback((updater) => {
-        setTweaksRaw(prev => {
-          const next = typeof updater === 'function' ? updater(prev) : updater;
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          } catch (err) {
-            if (!warnedAboutStorage) {
-              console.warn('[brain-monitor] localStorage unavailable; tweaks will not persist this session');
-              warnedAboutStorage = true;
-            }
-          }
-          return next;
-        });
-      }, []);
-      useEffect(() => {
-        document.documentElement.style.setProperty('--accent', tweaks.accent);
-      }, [tweaks.accent]);
-      return { tweaks, setTweaks };
-    }
-
-    function TweaksPanel({ tweaks, setTweaks, open, setOpen }) {
-      return (
-        <div style={{ position: "fixed", bottom: "190px", right: "12px", zIndex: 100 }}>
-          <button
-            onClick={() => setOpen(o => !o)}
-            style={{ background: "var(--accent)", color: "#000", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", fontFamily: "var(--font)", fontSize: "12px" }}
-          >
-            {open ? "close" : "tweaks"}
-          </button>
-          {open && (
-            <div style={{ marginTop: "6px", background: "#1a1a22", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "6px", padding: "10px 14px", display: "flex", flexDirection: "column", gap: "8px", minWidth: "180px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <input
-                  type="checkbox"
-                  checked={tweaks.running}
-                  onChange={e => setTweaks(t => ({ ...t, running: e.target.checked }))}
-                />
-                polling on
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                speed
-                <select
-                  value={tweaks.speed}
-                  onChange={e => setTweaks(t => ({ ...t, speed: Number(e.target.value) }))}
-                  style={{ background: "#222", color: "var(--fg)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "3px" }}
-                >
-                  <option value={0.5}>0.5×</option>
-                  <option value={1}>1×</option>
-                  <option value={2}>2×</option>
-                </select>
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                accent
-                <input
-                  type="color"
-                  value={tweaks.accent}
-                  onChange={e => setTweaks(t => ({ ...t, accent: e.target.value }))}
-                />
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <input
-                  type="checkbox"
-                  checked={tweaks.animations !== false}
-                  onChange={e => setTweaks(t => ({ ...t, animations: e.target.checked }))}
-                />
-                animations
-              </label>
-            </div>
-          )}
-        </div>
-      );
-    }
 
     // ── Hooks ──────────────────────────────────────────────────────────────────────
     function useStats(speed, paused) {
@@ -681,8 +615,9 @@
               color: paletteFor(e.memory_type),
               size: 4 + Math.log((e.access_count ?? 0) + 1) * 2,
               access_count: e.access_count ?? 0,
-              x: (Math.random() - 0.5) * 200,
-              y: (Math.random() - 0.5) * 200,
+              x: Math.random(),
+              y: Math.random(),
+              seeded: false,
               vx: 0, vy: 0,
               fx: null, fy: null,
             }));
@@ -715,16 +650,54 @@
     }
 
     // ── simulate ──────────────────────────────────────────────────────────────────
+    // Forces are accumulated into fx/fy per tick (reset every frame), then integrated
+    // into vx/vy with damping. Earlier versions accumulated forces into vx/vy directly,
+    // which caused systematic drift toward the upper-left because residual unbalanced
+    // forces compounded across frames instead of being recomputed from scratch.
+    // Ported from tmp/BrainV2/brain-graph.jsx::simulateForces. Adapted: real memories
+    // have no ontological hubs, so we synthesize one virtual hub per memory_type at a
+    // fixed position on a ring around center. Each memory is sprung toward its type-hub.
     function simulate(nodes, edges, size, dragNode, nodeById) {
       const cx = size.w / 2, cy = size.h / 2;
       const REPULSE_SAME = 220;
       const REPULSE_CROSS = 380;
-      const SPRING_K = 0.02;
+      const SPRING_K_EDGE = 0.02;
+      const SPRING_TARGET_EDGE = 80;
+      const HUB_PULL_K = 0.012;
+      const HUB_SPRING_TARGET = 60;
       const CENTER_K = 0.0005;
-      const CLUSTER_K = 0.001;
-      const DAMP = 0.85;
+      const DAMP = 0.78;
       const DT = 0.5;
       const MARGIN = 30;
+      const ringR = Math.min(size.w, size.h) * 0.30;
+
+      const types = Array.from(new Set(nodes.map(n => n.memory_type)));
+      const hubByType = new Map();
+      types.forEach((t, i) => {
+        const angle = (i / Math.max(1, types.length)) * Math.PI * 2;
+        hubByType.set(t, { x: cx + Math.cos(angle) * ringR, y: cy + Math.sin(angle) * ringR });
+      });
+
+      for (const n of nodes) {
+        if (!n.seeded) {
+          const hub = hubByType.get(n.memory_type);
+          const r = 60 + Math.random() * 40;
+          const a = Math.random() * Math.PI * 2;
+          n.x = hub.x + Math.cos(a) * r;
+          n.y = hub.y + Math.sin(a) * r;
+          n.seeded = true;
+        }
+        n.fxAcc = 0; n.fyAcc = 0;
+      }
+
+      for (const n of nodes) {
+        const hub = hubByType.get(n.memory_type);
+        const dx = hub.x - n.x, dy = hub.y - n.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f = (d - HUB_SPRING_TARGET) * HUB_PULL_K;
+        n.fxAcc += (dx / d) * f;
+        n.fyAcc += (dy / d) * f;
+      }
 
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
@@ -735,10 +708,10 @@
           if (d2 < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
           const sameType = a.memory_type === b.memory_type;
           const k = sameType ? REPULSE_SAME : REPULSE_CROSS;
-          const f = k / d2;
           const d = Math.sqrt(d2);
-          a.vx += (dx / d) * f; a.vy += (dy / d) * f;
-          b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+          const f = k / d2;
+          a.fxAcc += (dx / d) * f; a.fyAcc += (dy / d) * f;
+          b.fxAcc -= (dx / d) * f; b.fyAcc -= (dy / d) * f;
         }
       }
 
@@ -747,41 +720,31 @@
         if (!a || !b) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        const target = 80 + (a.size + b.size) / 2;
-        const f = (d - target) * SPRING_K;
-        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
-        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+        const target = SPRING_TARGET_EDGE + (a.size + b.size) / 2;
+        const f = (d - target) * SPRING_K_EDGE;
+        a.fxAcc += (dx / d) * f; a.fyAcc += (dy / d) * f;
+        b.fxAcc -= (dx / d) * f; b.fyAcc -= (dy / d) * f;
       }
 
       for (const n of nodes) {
-        n.vx += (cx - n.x) * CENTER_K;
-        n.vy += (cy - n.y) * CENTER_K;
+        n.fxAcc += (cx - n.x) * CENTER_K;
+        n.fyAcc += (cy - n.y) * CENTER_K;
       }
 
-      const sums = {};
       for (const n of nodes) {
-        const s = sums[n.memory_type] ??= { x: 0, y: 0, n: 0 };
-        s.x += n.x; s.y += n.y; s.n += 1;
-      }
-      for (const t of Object.keys(sums)) {
-        sums[t].x /= sums[t].n; sums[t].y /= sums[t].n;
-      }
-      for (const n of nodes) {
-        const s = sums[n.memory_type];
-        n.vx += (s.x - n.x) * CLUSTER_K;
-        n.vy += (s.y - n.y) * CLUSTER_K;
+        if (n.x < MARGIN) n.fxAcc += (MARGIN - n.x) * 0.05;
+        if (n.x > size.w - MARGIN) n.fxAcc += (size.w - MARGIN - n.x) * 0.05;
+        if (n.y < MARGIN) n.fyAcc += (MARGIN - n.y) * 0.05;
+        if (n.y > size.h - MARGIN) n.fyAcc += (size.h - MARGIN - n.y) * 0.05;
       }
 
       for (const n of nodes) {
         if (n === dragNode || n.fx != null) {
           n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; continue;
         }
-        n.vx *= DAMP; n.vy *= DAMP;
+        n.vx = (n.vx + n.fxAcc) * DAMP;
+        n.vy = (n.vy + n.fyAcc) * DAMP;
         n.x += n.vx * DT; n.y += n.vy * DT;
-        if (n.x < MARGIN) n.vx += (MARGIN - n.x) * 0.05;
-        if (n.x > size.w - MARGIN) n.vx += (size.w - MARGIN - n.x) * 0.05;
-        if (n.y < MARGIN) n.vy += (MARGIN - n.y) * 0.05;
-        if (n.y > size.h - MARGIN) n.vy += (size.h - MARGIN - n.y) * 0.05;
       }
     }
 
@@ -1812,26 +1775,21 @@
         <>
           {children}
           {parsed.route && (
-            <>
-              <div
-                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 90 }}
-                onClick={closeDrawer}
-              />
-              <aside style={{
-                position: 'fixed', right: 0, top: 0, height: '100vh', width: '600px',
-                background: '#0d0e15', borderLeft: '1px solid rgba(255,255,255,0.1)',
-                zIndex: 91, overflowY: 'auto',
-              }}>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--dim)' }}>{hash}</span>
-                  <button
-                    onClick={closeDrawer}
-                    style={{ background: 'none', border: 'none', color: 'var(--fg)', cursor: 'pointer', fontSize: '16px' }}
-                  >×</button>
-                </div>
-                {routeView}
-              </aside>
-            </>
+            <aside style={{
+              position: 'fixed', right: 0, top: 0, height: '100vh', width: '600px',
+              background: '#0d0e15', borderLeft: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '-8px 0 24px rgba(0,0,0,0.4)',
+              zIndex: 91, overflowY: 'auto',
+            }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', color: 'var(--dim)' }}>{hash}</span>
+                <button
+                  onClick={closeDrawer}
+                  style={{ background: 'none', border: 'none', color: 'var(--fg)', cursor: 'pointer', fontSize: '16px' }}
+                >×</button>
+              </div>
+              {routeView}
+            </aside>
           )}
         </>
       );
@@ -1841,15 +1799,17 @@
     function App() {
       const startMs = useRef(Date.now()).current;
       const [docHidden, setDocHidden] = useState(document.hidden);
-      const { tweaks, setTweaks } = useTweaks(TWEAK_DEFAULTS);
-      const setTab = React.useCallback(name => setTweaks(t => ({ ...t, tab: name })), [setTweaks]);
+      const [tab, setTab] = useState('graph');
+      const [agentFilter, setAgentFilter] = useState('all');
+      const [matrixSubview, setMatrixSubview] = useState('types');
+      const [running, setRunning] = useState(true);
       const [focus, setFocus] = useState(null);
-      const [tweaksOpen, setTweaksOpen] = useState(false);
       const activatedAtRef = useRef({});
       const footerSearchRef = useRef(null);
       const pendingAnimsRef = useRef([]);
       const prevEventsForAnimRef = useRef([]);
       const prevEdgeKeysRef = useRef(new Set());
+      const speed = 1;
 
       useEffect(() => {
         const onVisibility = () => setDocHidden(document.hidden);
@@ -1857,15 +1817,14 @@
         return () => document.removeEventListener("visibilitychange", onVisibility);
       }, []);
 
-      const paused = docHidden || !tweaks.running;
-      const { stats, queue, lastError: statsError } = useStats(tweaks.speed, paused);
-      const { events, lastError: eventsError } = useEvents(tweaks.speed, paused);
+      const paused = docHidden || !running;
+      const { stats, queue, lastError: statsError } = useStats(speed, paused);
+      const { events, lastError: eventsError } = useEvents(speed, paused);
       const graph = useGraph();
       const nodeSet = React.useMemo(() => new Set(graph.nodes.map(n => n.id)), [graph.nodes]);
-      const thoughts = useThoughts(tweaks.speed, paused, nodeSet, activatedAtRef);
+      const thoughts = useThoughts(speed, paused, nodeSet, activatedAtRef);
       const timeline = useTimeline();
       const lastError = statsError || eventsError;
-      const agentFilter = tweaks.agentFilter ?? 'all';
       const filterByAgent = React.useCallback(
         (arr) => agentFilter === 'all' ? arr : (arr ?? []).filter(item => item.agent === agentFilter),
         [agentFilter]
@@ -1873,11 +1832,6 @@
       const l2Recents = useL2Recents(events);
 
       useEffect(() => {
-        if (!tweaks.animations) {
-          prevEventsForAnimRef.current = events;
-          prevEdgeKeysRef.current = new Set(graph.edges.map(([a, b]) => `${a}|${b}`));
-          return;
-        }
         const prevSet = new Set(prevEventsForAnimRef.current.map(e => e.event_id ?? e.timestamp));
         for (const ev of events) {
           const key = ev.event_id ?? ev.timestamp;
@@ -1906,34 +1860,38 @@
           }
         }
         prevEdgeKeysRef.current = currentEdgeKeys;
-      }, [events, graph.edges, tweaks.animations]);
+      }, [events, graph.edges]);
 
       useEffect(() => {
         function onKey(e) {
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-          if (e.key === 'g') setTweaks(t => ({ ...t, tab: 'graph' }));
-          else if (e.key === 'm') setTweaks(t => ({ ...t, tab: 'matrix' }));
-          else if (e.key === 'c') setTweaks(t => ({ ...t, tab: 'console' }));
-          else if (e.key === ' ') { e.preventDefault(); setTweaks(t => ({ ...t, running: !t.running })); }
+          if (e.key === 'g') setTab('graph');
+          else if (e.key === 'm') setTab('matrix');
+          else if (e.key === 'c') setTab('console');
+          else if (e.key === ' ') { e.preventDefault(); setRunning(r => !r); }
           else if (e.key === 'r') { graph.refresh(); }
-          else if (e.key === 't') { setTweaksOpen(o => !o); }
           else if (e.key === 'Escape') { setFocus(null); }
           else if (e.key === '/') { e.preventDefault(); footerSearchRef.current?.focus(); }
         }
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
-      }, [graph.refresh, setTweaks, setTweaksOpen, setFocus]);
+      }, [graph.refresh, setFocus]);
 
       return (
         <div className="brain-shell" style={{ display: "contents" }}>
-          <Header stats={stats} queue={queue} lastError={lastError} startMs={startMs} buckets={timeline.buckets} events={events} tab={tweaks.tab} setTab={setTab} tweaks={tweaks} setTweaks={setTweaks} />
+          <Header
+            stats={stats} queue={queue} lastError={lastError}
+            startMs={startMs} buckets={timeline.buckets} events={events}
+            tab={tab} setTab={setTab}
+            agentFilter={agentFilter} setAgentFilter={setAgentFilter}
+          />
           <LeftPanel>
             <ClusterMeters stats={stats} />
             <TopAccessed entries={graph.nodes} focus={focus} setFocus={setFocus} />
           </LeftPanel>
           <div className="center-area">
             <div className="tab-content">
-              {tweaks.tab === 'graph' && (
+              {tab === 'graph' && (
                 <BrainGraph
                   nodes={filterByAgent(graph.nodes)}
                   edges={graph.edges}
@@ -1947,33 +1905,29 @@
                   paused={paused}
                   l2Recents={l2Recents}
                   pendingAnimsRef={pendingAnimsRef}
-                  animationsEnabled={tweaks.animations !== false}
+                  animationsEnabled={true}
                 />
               )}
-              {tweaks.tab === 'matrix' && (
+              {tab === 'matrix' && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <div className="tab-bar" style={{ flexShrink: 0 }}>
                     <button
-                      className={tweaks.matrixSubview !== 'agents' ? 'active' : ''}
-                      onClick={() => setTweaks(t => ({ ...t, matrixSubview: 'types' }))}
-                    >
-                      view: types
-                    </button>
+                      className={matrixSubview !== 'agents' ? 'active' : ''}
+                      onClick={() => setMatrixSubview('types')}
+                    >view: types</button>
                     <button
-                      className={tweaks.matrixSubview === 'agents' ? 'active' : ''}
-                      onClick={() => setTweaks(t => ({ ...t, matrixSubview: 'agents' }))}
-                    >
-                      view: agents
-                    </button>
+                      className={matrixSubview === 'agents' ? 'active' : ''}
+                      onClick={() => setMatrixSubview('agents')}
+                    >view: agents</button>
                   </div>
                   <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                    {tweaks.matrixSubview === 'agents'
+                    {matrixSubview === 'agents'
                       ? <AgentTypeMatrix entries={graph.nodes} />
                       : <MemoryTypeCooccurrence entries={graph.nodes} />}
                   </div>
                 </div>
               )}
-              {tweaks.tab === 'console' && <ConsoleView events={events} />}
+              {tab === 'console' && <ConsoleView events={events} />}
             </div>
           </div>
           <ThoughtStream
@@ -1982,7 +1936,6 @@
             setFocus={setFocus}
           />
           <Footer events={filterByAgent(events)} searchRef={footerSearchRef} lastError={lastError} />
-          <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} open={tweaksOpen} setOpen={setTweaksOpen} />
         </div>
       );
     }

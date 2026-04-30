@@ -12,8 +12,8 @@
 
 ## Code
 - [x] [SPEC-1] Create `docker/.env.example` with header comment, `GOOGLE_API_KEY=` empty value, and AI Studio URL — `docker/.env.example`
-- [ ] [SPEC-2] Create `docs/runbooks/secrets-management.md` covering: where Brain reads secrets, how to add a new secret (4-step procedure), one-time migration from Windows User env vars (6-step procedure including key rotation and Windows var deletion), and rotation procedure — `docs/runbooks/secrets-management.md`
-- [ ] [SPEC-3] Add one-line pointer to `docs/runbooks/secrets-management.md` in the `## Repo dependencies for a fresh agent` section of `README.md` — `README.md`
+- [x] [SPEC-2] Create `docs/runbooks/secrets-management.md` covering: where Brain reads secrets, how to add a new secret (4-step procedure), one-time migration from Windows User env vars (6-step procedure including key rotation and Windows var deletion), and rotation procedure — `docs/runbooks/secrets-management.md`
+- [x] [SPEC-3] Add one-line pointer to `docs/runbooks/secrets-management.md` in the `## Repo dependencies for a fresh agent` section of `README.md` — `README.md`
 
 ## Tests
 _(none — config/docs only, manual smoke documented in preamble above)_

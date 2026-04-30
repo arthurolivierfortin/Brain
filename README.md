@@ -182,6 +182,8 @@ Money keeps its current embedded Brain running until the new one is mature and d
 
 **Marcel** (`C:\Marcel`) — planned consumer. Next.js app. Will use `npx brain` once the installer lands.
 
+**Secrets** — `GOOGLE_API_KEY` (Gemini Flash extraction) lives in `docker/.env` (gitignored). See [docs/runbooks/secrets-management.md](docs/runbooks/secrets-management.md) for setup, migration from Windows env vars, and rotation.
+
 ## How a fresh Claude agent continues work
 
 1. Read `CLAUDE.md` (this repo) for coding style and communication preferences

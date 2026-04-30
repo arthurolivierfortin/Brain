@@ -20,4 +20,4 @@ Operational how-tos. If a fresh agent or a new contributor asks "how do I X?", t
 
 ## Index
 
-_(empty — fill as operational procedures stabilize)_
+- [secrets-management.md](secrets-management.md) — where Brain reads secrets, how to add a new secret, one-time migration from Windows User env vars, rotation procedure

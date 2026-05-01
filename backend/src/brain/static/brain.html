@@ -177,9 +177,10 @@
     // ── Header ────────────────────────────────────────────────────────────────────
     function Header({ stats, queue, lastError, startMs, buckets, events, tab, setTab, agentFilter, setAgentFilter }) {
       const total = stats?.total ?? 0;
-      const cores = Object.entries(stats?.types ?? {})
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 4);
+      const allTypes = Object.entries(stats?.types ?? {})
+        .sort(([, a], [, b]) => b - a);
+      const cores = allTypes.slice(0, 4);
+      while (cores.length < 4) cores.push(['—', 0]);
 
       const memUsed = total;
       const memMax = Math.max(1024, total * 1.5 || 1024);
@@ -193,7 +194,7 @@
       const l2Count = lastWakeUp?.metadata?.memory_ids?.L2?.length ?? 0;
       const l2Clickable = l2Count > 0 && lastWakeUp?.event_id;
 
-      const coreColors = ["var(--accent)", "var(--mem)", "var(--swap)", "var(--ok)"];
+      const coreColors = ["var(--accent)", "var(--mem)", "var(--ok)", "var(--swap)"];
 
       return (
         <header className="header-row" style={{
@@ -203,42 +204,46 @@
           gridTemplateColumns: "1fr auto",
           alignItems: "stretch",
         }}>
-          {/* LEFT: htop-style core meters + mem + swap */}
+          {/* LEFT: htop-style 4-col cores + mem (cols 1-2) + swap (cols 3-4) */}
           <div style={{
             padding: "8px 14px",
             display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            columnGap: "20px",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            columnGap: "18px",
             rowGap: "3px",
           }}>
             {cores.map(([type, count], i) => (
               <Bar
-                key={type}
-                label={type.slice(0, 4)}
+                key={`core-${i}`}
+                label={type === '—' ? '—' : type.slice(0, 4)}
                 value={count}
                 max={total || 1}
                 color={coreColors[i % coreColors.length]}
-                width={16}
+                width={18}
                 suffix={`${count}`}
               />
             ))}
-            <Bar
-              label="mem"
-              value={memUsed}
-              max={memMax}
-              color="var(--mem)"
-              width={36}
-              suffix={`${memUsed} / ${memMax}`}
-            />
-            <Bar
-              label="swap"
-              value={swapValue}
-              max={100}
-              color="var(--swap)"
-              width={36}
-              redZone={100}
-              suffix={`${swapValue} pending`}
-            />
+            <div style={{ gridColumn: "1 / 3" }}>
+              <Bar
+                label="mem"
+                value={memUsed}
+                max={memMax}
+                color="var(--mem)"
+                width={42}
+                suffix={`${memUsed} / ${memMax}`}
+              />
+            </div>
+            <div style={{ gridColumn: "3 / 5" }}>
+              <Bar
+                label="swap"
+                value={swapValue}
+                max={100}
+                color="var(--swap)"
+                width={42}
+                redZone={100}
+                suffix={`${swapValue} pending`}
+              />
+            </div>
           </div>
 
           {/* RIGHT: identity + stats + tabs */}
@@ -569,6 +574,38 @@
       return state;
     }
 
+    // ── useRawBuffer ─────────────────────────────────────────────────────────────
+    // Polls /raw_buffer/recent — the L1 hippocampal stream of user_message,
+    // assistant_message, tool_use events. This is what makes the monitor feel
+    // alive while the agent works (the ChromaDB /events stream only updates
+    // when Gemini extracts a fact, which is sparse).
+    function useRawBuffer(speed, paused) {
+      const [state, setState] = useState({ events: [], lastError: null });
+      useEffect(() => {
+        if (paused) return;
+        const ctrl = new AbortController();
+        const intervalMs = Math.max(1000, Math.round(1500 / speed));
+
+        async function fetchData() {
+          try {
+            const r = await fetch("/raw_buffer/recent?limit=80&minutes=120", { signal: ctrl.signal });
+            const data = await r.json();
+            const events = [...(data.events ?? [])].reverse();
+            setState({ events, lastError: null });
+          } catch (err) {
+            if (err.name !== "AbortError") {
+              setState(s => ({ ...s, lastError: err.message }));
+            }
+          }
+        }
+
+        fetchData();
+        const id = setInterval(fetchData, intervalMs);
+        return () => { clearInterval(id); ctrl.abort(); };
+      }, [speed, paused]);
+      return state;
+    }
+
     // ── paletteFor ───────────────────────────────────────────────────────────────
     function paletteFor(memoryType) {
       const P = {
@@ -633,6 +670,40 @@
                 edges.push([e.id < lid ? e.id : lid, e.id < lid ? lid : e.id]);
               });
             });
+
+            // Synthesize ghost edges between memories of the same type using
+            // a Jaccard-on-words heuristic. Threshold 0.18 keeps the graph
+            // readable (~2-3 edges per node max). Real backend-stored links
+            // (above) take precedence: only add ghost if no real link exists.
+            const STOP = new Set(['the','a','an','of','to','and','in','for','is','it','on','that','with','as','at','by','this','from','or','be','was','are','i','we','you','my','your']);
+            function tokens(s) {
+              return new Set(
+                String(s ?? '').toLowerCase()
+                  .replace(/[^a-z0-9\s]/g, ' ')
+                  .split(/\s+/)
+                  .filter(w => w.length > 2 && !STOP.has(w))
+              );
+            }
+            const tokSets = rawEntries.map(e => tokens(e.content));
+            const GHOST_THRESHOLD = 0.18;
+            for (let i = 0; i < rawEntries.length; i++) {
+              for (let j = i + 1; j < rawEntries.length; j++) {
+                const a = rawEntries[i], b = rawEntries[j];
+                if (a.memory_type !== b.memory_type) continue;
+                const ta = tokSets[i], tb = tokSets[j];
+                if (ta.size === 0 || tb.size === 0) continue;
+                let inter = 0;
+                for (const w of ta) if (tb.has(w)) inter++;
+                const union = ta.size + tb.size - inter;
+                const jacc = union > 0 ? inter / union : 0;
+                if (jacc < GHOST_THRESHOLD) continue;
+                const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                edges.push([a.id < b.id ? a.id : b.id, a.id < b.id ? b.id : a.id, 'ghost', jacc]);
+              }
+            }
+
             setState({ nodes, edges, lastError: null, lastFetchedAt: Date.now(), isLoading: false });
           })
           .catch(err => {
@@ -765,17 +836,22 @@
         }
       }
 
-      ctx.lineWidth = 1;
-      for (const [aId, bId] of edges) {
+      for (const edge of edges) {
+        const aId = edge[0], bId = edge[1], kind = edge[2], score = edge[3];
         const a = nodeById.get(aId), b = nodeById.get(bId);
         if (!a || !b) continue;
         const inFocus = focus && (focus === aId || focus === bId);
         const eitherActive = (now - (activatedAt[aId] ?? 0) < 5000) || (now - (activatedAt[bId] ?? 0) < 5000);
-        ctx.globalAlpha = focus ? (inFocus ? 0.9 : 0.05) : (eitherActive ? 0.5 : 0.15);
-        ctx.strokeStyle = a.memory_type === b.memory_type ? a.color : '#3a3f4d';
+        const isGhost = kind === 'ghost';
+        const baseAlpha = isGhost ? (0.08 + (score ?? 0.2) * 0.4) : 0.5;
+        ctx.globalAlpha = focus ? (inFocus ? 0.9 : 0.04) : (eitherActive ? Math.min(0.7, baseAlpha + 0.3) : baseAlpha);
+        ctx.strokeStyle = isGhost ? a.color : (a.memory_type === b.memory_type ? a.color : '#3a3f4d');
+        ctx.lineWidth = isGhost ? 0.7 : 1.1;
+        if (isGhost) ctx.setLineDash([3, 3]); else ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
+      ctx.setLineDash([]);
 
       for (const n of nodes) {
         const t = activatedAt[n.id];
@@ -1056,18 +1132,67 @@
     }
 
     // ── ThoughtStream ─────────────────────────────────────────────────────────────
-    function ThoughtStream({ events, focus, setFocus }) {
-      function badgeColor(type) {
-        if (type === 'hook_wake_up') return 'var(--ok)';
-        if (type === 'hook_post_turn') return 'var(--accent)';
-        if (type.includes('reject')) return 'var(--swap)';
-        if (type.includes('error') || type.includes('failed')) return 'var(--err)';
-        return '#555';
+    // Merges Brain extracted events (from /events) with the L1 raw stream
+    // (from /raw_buffer/recent). Raw events show user prompts, assistant turns,
+    // and tool uses in real time — this is what makes the monitor feel alive
+    // even when Gemini hasn't extracted a fact in a while.
+    function ThoughtStream({ events, rawEvents, focus, setFocus }) {
+      function badgeColor(kind) {
+        if (kind === 'user_message') return 'var(--accent)';
+        if (kind === 'assistant_message') return 'var(--l2)';
+        if (kind === 'tool_use') return '#5d6478';
+        if (kind === 'hook_wake_up') return 'var(--ok)';
+        if (kind === 'hook_post_turn') return 'var(--mem)';
+        if (kind === 'stored') return 'var(--ok)';
+        if (kind === 'reinforced') return 'var(--swap)';
+        if ((kind ?? '').includes('reject')) return 'var(--swap)';
+        if ((kind ?? '').includes('error') || (kind ?? '').includes('failed')) return 'var(--err)';
+        return '#3a3f4d';
       }
 
+      function badgeLabel(kind) {
+        // Compact 4-char tags so the stream stays scannable.
+        const map = {
+          user_message: 'user',
+          assistant_message: 'asst',
+          tool_use: 'tool',
+          hook_wake_up: 'wake',
+          hook_post_turn: 'turn',
+          degraded_wake_up: 'wake!',
+          stored: 'sto',
+          reinforced: 're',
+          searched: 'srch',
+        };
+        return map[kind] ?? (kind ?? '').slice(0, 6);
+      }
+
+      const merged = React.useMemo(() => {
+        const a = (events ?? []).map(ev => ({
+          source: 'brain',
+          ts: ev.timestamp,
+          kind: ev.event_type ?? '',
+          agent: ev.agent ?? '',
+          content: ev.details ?? '',
+          meta: ev.metadata ?? {},
+          node_id: ev.node_id,
+          event_id: ev.event_id,
+        }));
+        const b = (rawEvents ?? []).map(ev => ({
+          source: 'raw',
+          ts: ev.timestamp,
+          kind: ev.kind ?? '',
+          agent: ev.agent ?? '',
+          content: ev.kind === 'tool_use' ? `${ev.tool_name ?? '?'} · ${(ev.content ?? '').slice(0, 60)}` : (ev.content ?? ''),
+          meta: ev.metadata ?? {},
+          event_id: ev.event_id,
+        }));
+        const all = [...a, ...b].sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime());
+        return all.slice(0, 200);
+      }, [events, rawEvents]);
+
       const filtered = focus
-        ? events.filter(ev => ev.node_id === focus || ev.metadata?.entry_id === focus)
-        : events;
+        ? merged.filter(ev => ev.node_id === focus || ev.meta?.entry_id === focus)
+        : merged;
 
       return (
         <div className="thought-stream">
@@ -1087,29 +1212,36 @@
                 >×</button>
               </>
             ) : (
-              <span style={{ opacity: 0.5 }}>all events</span>
+              <span style={{ opacity: 0.5, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="blink" style={{ color: 'var(--ok)', fontSize: '10px' }}>●</span>
+                live · {merged.length} events
+              </span>
             )}
           </div>
-          <ul style={{ listStyle: 'none', overflowY: 'auto', flex: 1, padding: '4px 0' }}>
+          <ul style={{ listStyle: 'none', overflowY: 'auto', flex: 1, padding: '4px 0', margin: 0 }}>
             {filtered.map((ev, i) => {
-              const type = ev.event_type ?? '';
-              const details = (ev.details ?? '').slice(0, 40);
-              const meta = ev.metadata ?? {};
+              const isRaw = ev.source === 'raw';
               return (
-                <li key={`${ev.timestamp}-${i}`} style={{
+                <li key={`${ev.event_id ?? ev.ts}-${i}`} style={{
                   padding: '3px 10px',
                   borderBottom: '1px solid rgba(255,255,255,0.04)',
                   fontSize: '11px',
-                  display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'baseline',
+                  display: 'flex', flexWrap: 'nowrap', gap: '6px', alignItems: 'baseline',
+                  opacity: isRaw ? 1 : 0.85,
                 }}>
-                  <span style={{ padding: '0 3px', borderRadius: '2px', background: badgeColor(type), color: '#000', fontSize: '10px', flexShrink: 0 }}>
-                    {type}
+                  <span style={{
+                    padding: '0 4px', borderRadius: '2px',
+                    background: badgeColor(ev.kind), color: '#000',
+                    fontSize: '9px', flexShrink: 0, fontWeight: 600, letterSpacing: 0.5,
+                    minWidth: '32px', textAlign: 'center',
+                  }}>
+                    {badgeLabel(ev.kind)}
                   </span>
-                  <span style={{ opacity: 0.7, flexShrink: 0 }}>{ev.agent ?? ''}</span>
-                  {details && <span style={{ opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{details}</span>}
-                  {meta.duration_ms != null && <span style={{ opacity: 0.45, flexShrink: 0 }}>{meta.duration_ms}ms</span>}
-                  {meta.tokens_approx != null && <span style={{ opacity: 0.45, flexShrink: 0 }}>{meta.tokens_approx}t</span>}
-                  <span style={{ opacity: 0.4, flexShrink: 0, marginLeft: 'auto' }}>{formatRelative(ev.timestamp)}</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isRaw ? 'var(--fg)' : 'var(--dim)' }}>
+                    {ev.content || (ev.agent ? `(${ev.agent})` : '')}
+                  </span>
+                  {ev.meta?.duration_ms != null && <span style={{ opacity: 0.45, flexShrink: 0 }}>{ev.meta.duration_ms}ms</span>}
+                  <span style={{ opacity: 0.4, flexShrink: 0 }}>{formatRelative(ev.ts)}</span>
                 </li>
               );
             })}
@@ -1737,6 +1869,8 @@
       return { route: null };
     }
 
+    const RouteContext = React.createContext({ parsed: { route: null }, hash: '', closeDrawer: () => {} });
+
     function HashRouter({ children }) {
       const [hash, setHash] = React.useState(window.location.hash);
 
@@ -1761,37 +1895,43 @@
 
       const parsed = parseHash(hash);
 
-      function closeDrawer() {
+      const closeDrawer = React.useCallback(() => {
         history.replaceState(null, '', window.location.pathname);
         window.dispatchEvent(new Event('hashchange'));
-      }
+      }, []);
 
-      let routeView = null;
-      if (parsed.route === 'memory') routeView = <MemoryInspector memId={parsed.id} />;
-      else if (parsed.route === 'hook') routeView = <HookReplay eventId={parsed.id} />;
-      else if (parsed.route === 'agent') routeView = <AgentProfile name={parsed.name} />;
+      const value = React.useMemo(() => ({ parsed, hash, closeDrawer }), [hash, closeDrawer, parsed.route, parsed.id, parsed.name]);
+
+      return <RouteContext.Provider value={value}>{children}</RouteContext.Provider>;
+    }
+
+    function RouteInspector() {
+      const { parsed, hash, closeDrawer } = React.useContext(RouteContext);
+      if (!parsed.route) return null;
+
+      let view = null;
+      if (parsed.route === 'memory') view = <MemoryInspector memId={parsed.id} />;
+      else if (parsed.route === 'hook') view = <HookReplay eventId={parsed.id} />;
+      else if (parsed.route === 'agent') view = <AgentProfile name={parsed.name} />;
 
       return (
-        <>
-          {children}
-          {parsed.route && (
-            <aside style={{
-              position: 'fixed', right: 0, top: 0, height: '100vh', width: '600px',
-              background: '#0d0e15', borderLeft: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: '-8px 0 24px rgba(0,0,0,0.4)',
-              zIndex: 91, overflowY: 'auto',
-            }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: 'var(--dim)' }}>{hash}</span>
-                <button
-                  onClick={closeDrawer}
-                  style={{ background: 'none', border: 'none', color: 'var(--fg)', cursor: 'pointer', fontSize: '16px' }}
-                >×</button>
-              </div>
-              {routeView}
-            </aside>
-          )}
-        </>
+        <div style={{
+          position: 'absolute', inset: 0, background: 'var(--bg)',
+          overflowY: 'auto', zIndex: 5,
+        }}>
+          <div style={{
+            padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: 'rgba(255,255,255,0.02)',
+          }}>
+            <span style={{ fontSize: '11px', color: 'var(--dim)', fontFamily: 'var(--font)' }}>{hash}</span>
+            <button
+              onClick={closeDrawer}
+              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--fg)', cursor: 'pointer', fontSize: '12px', padding: '2px 8px' }}
+            >× close</button>
+          </div>
+          {view}
+        </div>
       );
     }
 
@@ -1820,6 +1960,7 @@
       const paused = docHidden || !running;
       const { stats, queue, lastError: statsError } = useStats(speed, paused);
       const { events, lastError: eventsError } = useEvents(speed, paused);
+      const { events: rawEvents } = useRawBuffer(speed, paused);
       const graph = useGraph();
       const nodeSet = React.useMemo(() => new Set(graph.nodes.map(n => n.id)), [graph.nodes]);
       const thoughts = useThoughts(speed, paused, nodeSet, activatedAtRef);
@@ -1891,6 +2032,7 @@
           </LeftPanel>
           <div className="center-area">
             <div className="tab-content">
+              <RouteInspector />
               {tab === 'graph' && (
                 <BrainGraph
                   nodes={filterByAgent(graph.nodes)}
@@ -1932,6 +2074,7 @@
           </div>
           <ThoughtStream
             events={filterByAgent(thoughts.events)}
+            rawEvents={filterByAgent(rawEvents)}
             focus={focus}
             setFocus={setFocus}
           />

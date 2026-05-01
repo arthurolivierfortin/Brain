@@ -241,6 +241,19 @@ def create_http_app():
                 limit = int(params.get("limit", ["50"])[0])
                 events = get_events()
                 self._json_response({"events": events.recent(limit=limit)})
+            elif parsed.path == "/raw_buffer/recent":
+                from datetime import UTC, datetime, timedelta
+                limit = int(params.get("limit", ["100"])[0])
+                minutes = int(params.get("minutes", ["120"])[0])
+                since = datetime.now(UTC) - timedelta(minutes=minutes)
+                rb = get_raw_buffer()
+                try:
+                    events = rb.list_since(since, limit=limit)
+                    payload = [e.model_dump(mode="json") for e in events]
+                    self._json_response({"events": payload, "count": len(payload)})
+                except Exception as e:
+                    logger.warning("/raw_buffer/recent failed: %s", e)
+                    self._json_response({"events": [], "count": 0, "error": str(e)})
             elif parsed.path == "/events/timeline":
                 events = get_events()
                 self._json_response({"timeline": events.stats_over_time()})

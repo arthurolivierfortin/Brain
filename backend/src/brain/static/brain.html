@@ -180,7 +180,6 @@
       const allTypes = Object.entries(stats?.types ?? {})
         .sort(([, a], [, b]) => b - a);
       const cores = allTypes.slice(0, 4);
-      while (cores.length < 4) cores.push(['—', 0]);
 
       const memUsed = total;
       const memMax = Math.max(1024, total * 1.5 || 1024);
@@ -189,12 +188,14 @@
       const eventsLast60s = (events ?? []).filter(
         e => Date.now() - new Date(e.timestamp).getTime() < 60000
       );
+      const evtPerSec = (eventsLast60s.length / 60).toFixed(1);
 
       const lastWakeUp = (events ?? []).find(e => e.event_type === 'hook_wake_up');
       const l2Count = lastWakeUp?.metadata?.memory_ids?.L2?.length ?? 0;
       const l2Clickable = l2Count > 0 && lastWakeUp?.event_id;
 
-      const coreColors = ["var(--accent)", "var(--mem)", "var(--ok)", "var(--swap)"];
+      const coreColors = ["var(--accent)", "var(--ok)", "var(--mem)", "var(--swap)"];
+      const coreCols = Math.max(1, cores.length);
 
       return (
         <header className="header-row" style={{
@@ -204,26 +205,36 @@
           gridTemplateColumns: "1fr auto",
           alignItems: "stretch",
         }}>
-          {/* LEFT: htop-style 4-col cores + mem (cols 1-2) + swap (cols 3-4) */}
+          {/* LEFT: row 1 = N cores · row 2 = mem | swap (each spans half) */}
           <div style={{
             padding: "8px 14px",
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            columnGap: "18px",
-            rowGap: "3px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "5px",
           }}>
-            {cores.map(([type, count], i) => (
-              <Bar
-                key={`core-${i}`}
-                label={type === '—' ? '—' : type.slice(0, 4)}
-                value={count}
-                max={total || 1}
-                color={coreColors[i % coreColors.length]}
-                width={18}
-                suffix={`${count}`}
-              />
-            ))}
-            <div style={{ gridColumn: "1 / 3" }}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${coreCols}, minmax(0, 1fr))`,
+              columnGap: "18px",
+              rowGap: "3px",
+            }}>
+              {cores.map(([type, count], i) => (
+                <Bar
+                  key={`core-${type}`}
+                  label={type.slice(0, 4)}
+                  value={count}
+                  max={total || 1}
+                  color={coreColors[i % coreColors.length]}
+                  width={20}
+                  suffix={`${count}`}
+                />
+              ))}
+            </div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              columnGap: "18px",
+            }}>
               <Bar
                 label="mem"
                 value={memUsed}
@@ -232,8 +243,6 @@
                 width={42}
                 suffix={`${memUsed} / ${memMax}`}
               />
-            </div>
-            <div style={{ gridColumn: "3 / 5" }}>
               <Bar
                 label="swap"
                 value={swapValue}
@@ -1915,22 +1924,21 @@
       else if (parsed.route === 'agent') view = <AgentProfile name={parsed.name} />;
 
       return (
-        <div style={{
-          position: 'absolute', inset: 0, background: 'var(--bg)',
-          overflowY: 'auto', zIndex: 5,
-        }}>
+        <div className="thought-stream" style={{ overflow: 'hidden' }}>
           <div style={{
-            padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+            padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            background: 'rgba(255,255,255,0.02)',
+            background: 'rgba(255,255,255,0.02)', flexShrink: 0, fontSize: '11px',
           }}>
-            <span style={{ fontSize: '11px', color: 'var(--dim)', fontFamily: 'var(--font)' }}>{hash}</span>
+            <span style={{ color: 'var(--accent)', fontFamily: 'var(--font)' }}>{hash}</span>
             <button
               onClick={closeDrawer}
-              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--fg)', cursor: 'pointer', fontSize: '12px', padding: '2px 8px' }}
+              style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--fg)', cursor: 'pointer', fontSize: '11px', padding: '1px 8px' }}
             >× close</button>
           </div>
-          {view}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {view}
+          </div>
         </div>
       );
     }
@@ -1961,6 +1969,7 @@
       const { stats, queue, lastError: statsError } = useStats(speed, paused);
       const { events, lastError: eventsError } = useEvents(speed, paused);
       const { events: rawEvents } = useRawBuffer(speed, paused);
+      const route = React.useContext(RouteContext);
       const graph = useGraph();
       const nodeSet = React.useMemo(() => new Set(graph.nodes.map(n => n.id)), [graph.nodes]);
       const thoughts = useThoughts(speed, paused, nodeSet, activatedAtRef);
@@ -2032,7 +2041,6 @@
           </LeftPanel>
           <div className="center-area">
             <div className="tab-content">
-              <RouteInspector />
               {tab === 'graph' && (
                 <BrainGraph
                   nodes={filterByAgent(graph.nodes)}
@@ -2072,12 +2080,16 @@
               {tab === 'console' && <ConsoleView events={events} />}
             </div>
           </div>
-          <ThoughtStream
-            events={filterByAgent(thoughts.events)}
-            rawEvents={filterByAgent(rawEvents)}
-            focus={focus}
-            setFocus={setFocus}
-          />
+          {route.parsed.route ? (
+            <RouteInspector />
+          ) : (
+            <ThoughtStream
+              events={filterByAgent(thoughts.events)}
+              rawEvents={filterByAgent(rawEvents)}
+              focus={focus}
+              setFocus={setFocus}
+            />
+          )}
           <Footer events={filterByAgent(events)} searchRef={footerSearchRef} lastError={lastError} />
         </div>
       );

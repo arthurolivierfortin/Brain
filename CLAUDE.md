@@ -1,3 +1,18 @@
+<!-- core-project
+nom: Brain
+categorie: perso
+github: arthurolivierfortin/Brain
+publication_branch: main
+work_branch: main
+stack: python+docker
+gates:
+  - id: GATE-1  name: lint  cmd: cd backend && ruff check .
+  - id: GATE-2  name: typecheck  cmd: cd backend && mypy .
+  - id: GATE-3  name: test  cmd: cd backend && pytest
+ux_verifier: disabled
+derogations: []
+-->
+
 # Brain — Agent Guide
 
 You are working in the **Brain** repo, a drop-in memory system for LLM apps. If you have never seen this project, read [README.md](README.md) first, then come back here.
@@ -72,6 +87,8 @@ docs/
 - **Claude Code statusLine + SessionStart + Stop hooks** — `.claude/settings.json` wires them to `scripts/brain_statusline.py`, `scripts/brain_wake_up.py`, `scripts/brain_post_turn.py`
 
 ## Docker safety — non-negotiable invariants
+
+- Never dispatch a subagent with `subagent_type="general-purpose"` from inside a container: it crashes silently and has caused lost work in Money. Use a named agent (builder, judge, …).
 
 Context: on 2026-04-17 an agent ran `docker compose --project-name docker --remove-orphans down` from `C:/Brain/docker/` and wiped 10 Money containers (volumes survived, images cached). The project name `docker` was derived from the parent directory and collided with Money's `C:/Money/docker/` compose. **Never repeat this.**
 

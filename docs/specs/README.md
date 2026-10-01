@@ -24,3 +24,4 @@ Specs are historical records of what was approved at a moment in time. Do NOT ed
 ## Index
 
 - [`2026-04-17-benchmarks-design.md`](2026-04-17-benchmarks-design.md) — LongMemEval + Brain-Bench harness design (phase 5a + 5b placeholder)
+- [`2026-10-01-brain-fournisseur-des-prises-design.md`](2026-10-01-brain-fournisseur-des-prises-design.md) — Brain comme mémoire épisodique et fournisseur des prises du cockpit ; paliers B0 à B3, porte anti-secrets, export générique vers l'inbox du KB
